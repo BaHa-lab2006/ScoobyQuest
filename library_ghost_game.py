@@ -379,18 +379,27 @@ class BaseMinigame:
 class SortBooksMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.slots = [None, None, None]  # позиции 0,1,2
+        # Слоты хранят ссылки на книги (None или объект книги)
+        self.slots = [None, None, None]
         self.books = []
-        # Книги с цифрами 3,1,2 (перепутаны)
+        # Исходные позиции для книг внизу
         positions = [(300, 500), (450, 500), (600, 500)]
-        numbers = [3,1,2]
+        numbers = [3, 1, 2]
         for i, num in enumerate(numbers):
             img = assets.get_image(f'book_{num}')
             if img is None:
-                img = pygame.Surface((80,100))
+                img = pygame.Surface((80, 100))
                 img.fill(COLORS['ORANGE'])
             rect = pygame.Rect(positions[i][0], positions[i][1], 80, 100)
-            self.books.append({'img': img, 'rect': rect, 'num': num, 'dragging': False, 'drag_offset': (0,0)})
+            self.books.append({
+                'img': img,
+                'rect': rect,
+                'num': num,
+                'start_pos': positions[i],
+                'dragging': False,
+                'drag_offset': (0, 0),
+                'slot_idx': None  # индекс слота, если книга в слоте
+            })
         self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
                                 assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
@@ -403,33 +412,48 @@ class SortBooksMinigame(BaseMinigame):
 
     def handle_event(self, event):
         super().handle_event(event)
+        
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for b in self.books:
                 if b['rect'].collidepoint(event.pos):
                     b['dragging'] = True
                     b['drag_offset'] = (b['rect'].x - event.pos[0], b['rect'].y - event.pos[1])
                     self.assets.play_sound('click')
+                    # Если книга была в слоте, освобождаем слот
+                    if b['slot_idx'] is not None:
+                        self.slots[b['slot_idx']] = None
+                        b['slot_idx'] = None
+                    break
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             for b in self.books:
                 if b['dragging']:
                     b['dragging'] = False
-                    # Проверить попадание в слот
+                    # Проверяем попадание в какой-либо слот
                     placed = False
                     for idx, slot_rect in enumerate(self.slot_rects):
                         if b['rect'].colliderect(slot_rect):
-                            # Положить в слот
-                            b['rect'].center = slot_rect.center
-                            self.slots[idx] = b['num']
-                            placed = True
-                            break
+                            if self.slots[idx] is None:
+                                # Слот свободен – ставим книгу
+                                b['rect'].center = slot_rect.center
+                                self.slots[idx] = b
+                                b['slot_idx'] = idx
+                                self.assets.play_sound('book_move')
+                                placed = True
+                                break
                     if not placed:
-                        # Вернуть в исходное
-                        orig_pos = [(300,500),(450,500),(600,500)][self.books.index(b)]
-                        b['rect'].topleft = orig_pos
-                    # Обновить слоты: удалить если книга ушла
-                    for idx, val in enumerate(self.slots):
-                        if val == b['num'] and not any(b2['num'] == val and b2['rect'].colliderect(self.slot_rects[idx]) for b2 in self.books):
-                            self.slots[idx] = None
+                        # Проверяем, не отпустили ли книгу в нижнюю область (возврат)
+                        if b['rect'].y > 400:  # примерно область внизу
+                            b['rect'].topleft = b['start_pos']
+                            b['slot_idx'] = None
+                        else:
+                            # Иначе возвращаем на прежнее место (если была в слоте – вернём в слот, но слот уже пуст)
+                            if b['slot_idx'] is not None:
+                                b['rect'].center = self.slot_rects[b['slot_idx']].center
+                            else:
+                                b['rect'].topleft = b['start_pos']
+                    # После каждого перемещения пересчитываем содержимое слотов
+                    # (на случай, если книга вытащена, слот уже очищен)
+                    break
         elif event.type == pygame.MOUSEMOTION:
             for b in self.books:
                 if b['dragging']:
@@ -437,7 +461,10 @@ class SortBooksMinigame(BaseMinigame):
                     b['rect'].y = event.pos[1] + b['drag_offset'][1]
 
     def check(self):
-        if self.slots == [1,2,3]:
+        # Проверяем, что в слотах книги с номерами 1,2,3 по порядку
+        if (self.slots[0] is not None and self.slots[0]['num'] == 1 and
+            self.slots[1] is not None and self.slots[1]['num'] == 2 and
+            self.slots[2] is not None and self.slots[2]['num'] == 3):
             self.assets.play_sound('success')
             self.complete(True)
         else:
@@ -445,15 +472,10 @@ class SortBooksMinigame(BaseMinigame):
             self.show_message("Нет, начни с единицы!", COLORS['RED'])
 
     def draw(self, surface):
-        # Рисуем полку с местами
-        for i, rect in enumerate(self.slot_rects):
+        # Рисуем пустые слоты
+        for rect in self.slot_rects:
             pygame.draw.rect(surface, COLORS['BROWN'], rect, 3)
-            if self.slots[i] is not None:
-                num = self.slots[i]
-                img = self.assets.get_image(f'book_{num}')
-                if img:
-                    surface.blit(img, rect)
-        # Рисуем книги снизу
+        # Рисуем книги (все)
         for b in self.books:
             surface.blit(b['img'], b['rect'])
         title = self.assets.fonts['medium'].render("Расставь книги по порядку: 1, 2, 3", True, COLORS['GOLD'])
@@ -466,32 +488,123 @@ class SortBooksMinigame(BaseMinigame):
 class LogicRowMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.options = ["🔴 КНИГА", "🔵 КНИГА", "🟢 ТЕТРАДЬ"]
-        self.correct_idx = 1
-        self.buttons = []
-        for i, opt in enumerate(self.options):
-            btn = Button(pygame.Rect(300, 400 + i*70, 400, 60), opt,
-                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
-                         callback=lambda i=i: self.check(i))
-            self.buttons.append(btn)
-        self.ui_elements = self.buttons
+        # Загружаем спрайты
+        self.sprites = {
+            'red_book': assets.get_image('book_red'),
+            'blue_book': assets.get_image('book_blue'),
+            'green_notebook': assets.get_image('book_green')
+        }
+        # Если нет зелёной книги, создадим зелёный прямоугольник
+        if self.sprites['green_notebook'] is None:
+            self.sprites['green_notebook'] = pygame.Surface((80, 100))
+            self.sprites['green_notebook'].fill(COLORS['GREEN'])
+        
+        # Перетаскиваемые варианты (находятся снизу)
+        self.options = [
+            {'sprite': self.sprites['red_book'], 'rect': pygame.Rect(150, 500, 80, 100), 'type': 'red',
+             'dragging': False, 'drag_offset': (0,0), 'placed': False},
+            {'sprite': self.sprites['blue_book'], 'rect': pygame.Rect(350, 500, 80, 100), 'type': 'blue',
+             'dragging': False, 'drag_offset': (0,0), 'placed': False},
+            {'sprite': self.sprites['green_notebook'], 'rect': pygame.Rect(550, 500, 80, 100), 'type': 'green',
+             'dragging': False, 'drag_offset': (0,0), 'placed': False}
+        ]
+        # Слот для варианта (пустое место в ряду)
+        self.slot_rect = pygame.Rect(600, 250, 80, 100)
+        self.placed_option = None  # какой вариант сейчас в слоте
+        
+        # Ряд с образцом: красная, синяя, красная
+        self.row_sprites = [
+            self.sprites['red_book'],
+            self.sprites['blue_book'],
+            self.sprites['red_book']
+        ]
+        self.row_positions = [(150, 250), (300, 250), (450, 250)]
+        
+        self.correct_type = 'blue'  # правильный вариант – синяя книга
+        
+        # Кнопка проверки
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+                                callback=self.check)
+        self.ui_elements = self.options + [self.check_btn]
 
-    def check(self, idx):
-        if idx == self.correct_idx:
+    def handle_event(self, event):
+        super().handle_event(event)  # для кнопки проверки
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for opt in self.options:
+                if not opt['placed'] and opt['rect'].collidepoint(event.pos):
+                    opt['dragging'] = True
+                    opt['drag_offset'] = (opt['rect'].x - event.pos[0], opt['rect'].y - event.pos[1])
+                    self.assets.play_sound('click')
+                    break
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            for opt in self.options:
+                if opt['dragging']:
+                    opt['dragging'] = False
+                    # Проверяем, попал ли вариант в слот
+                    if opt['rect'].colliderect(self.slot_rect) and self.placed_option is None:
+                        # Помещаем в слот
+                        opt['rect'].center = self.slot_rect.center
+                        opt['placed'] = True
+                        self.placed_option = opt
+                        self.assets.play_sound('book_move')
+                    else:
+                        # Возвращаем на исходную позицию
+                        self._reset_option_position(opt)
+                    break
+        elif event.type == pygame.MOUSEMOTION:
+            for opt in self.options:
+                if opt['dragging']:
+                    opt['rect'].x = event.pos[0] + opt['drag_offset'][0]
+                    opt['rect'].y = event.pos[1] + opt['drag_offset'][1]
+
+    def _reset_option_position(self, opt):
+        # Возвращает вариант на исходную позицию по его типу
+        orig = {'red': (150, 500), 'blue': (350, 500), 'green': (550, 500)}
+        opt['rect'].topleft = orig.get(opt['type'], (150, 500))
+        opt['placed'] = False
+
+    def check(self):
+        if self.placed_option is None:
+            self.show_message("Сначала положи вариант в пустое место!", COLORS['YELLOW'])
+            self.assets.play_sound('fail')
+            return
+        if self.placed_option['type'] == self.correct_type:
             self.assets.play_sound('success')
             self.complete(True)
         else:
             self.assets.play_sound('fail')
             self.show_message("Посмотри внимательно: цвета чередуются. Красный, синий, красный… какой следующий?")
+            # Возвращаем неправильный вариант на место
+            self._reset_option_position(self.placed_option)
+            self.placed_option = None
 
     def draw(self, surface):
-        title = self.assets.fonts['medium'].render("Какой предмет следующий?", True, COLORS['GOLD'])
-        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 100))
-        items = ["🔴 КНИГА", "🔵 КНИГА", "🔴 КНИГА", "?"]
-        x_start = 200
-        for i, it in enumerate(items):
-            txt = self.assets.fonts['small'].render(it, True, COLORS['WHITE'])
-            surface.blit(txt, (x_start + i*150, 250))
+        # Рисуем ряд с образцом (первые три книги)
+        for i, sprite in enumerate(self.row_sprites):
+            if sprite:
+                surface.blit(sprite, self.row_positions[i])
+            else:
+                pygame.draw.rect(surface, COLORS['GRAY'], pygame.Rect(self.row_positions[i][0], self.row_positions[i][1], 80, 100))
+        # Рисуем пустой слот (вопросительный знак)
+        pygame.draw.rect(surface, COLORS['WHITE'], self.slot_rect, 3)
+        if self.placed_option is None:
+            font = self.assets.fonts['large']
+            q_mark = font.render("?", True, COLORS['WHITE'])
+            surface.blit(q_mark, q_mark.get_rect(center=self.slot_rect.center))
+        else:
+            # Отрисовываем вариант, лежащий в слоте
+            surface.blit(self.placed_option['sprite'], self.slot_rect)
+        
+        # Рисуем перетаскиваемые варианты (только неразмещённые)
+        for opt in self.options:
+            if not opt['placed']:
+                surface.blit(opt['sprite'], opt['rect'])
+        
+        title = self.assets.fonts['medium'].render("Перетащи правильный предмет в пустое место", True, COLORS['GOLD'])
+        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
+        self.check_btn.draw(surface)
         super().draw(surface)
 
 
@@ -1038,7 +1151,10 @@ class LoadingScreen(Screen):
     def update(self, dt):
         self.timer -= dt
         if self.timer <= 0:
-            self.game.set_state('PROLOG')
+            if len(self.game.completed_locations) > 0 or len(self.game.collected_letters) > 0:
+                self.game.set_state('MAP')
+            else:
+                self.game.set_state('PROLOG')
 
     def draw(self, surface):
         bg = self.game.assets.get_image('prolog_bg')
@@ -1109,10 +1225,10 @@ class MapScreen(Screen):
             (6, "Чердак", 650, 650, 'А')
         ]
         self.buttons = []
-        self.update_buttons()
         self.home_btn = Button(pygame.Rect(30, SCREEN_HEIGHT-60, 100, 40), "Домой",
                                game.assets.fonts['small'], COLORS['RED'], COLORS['ORANGE'],
                                callback=self.game.exit_game)
+        self.last_completed = None
 
     def update_buttons(self):
         self.buttons = []
@@ -1140,6 +1256,10 @@ class MapScreen(Screen):
         self.home_btn.handle_event(event)
 
     def draw(self, surface):
+        if self.last_completed != self.game.completed_locations.copy():
+            self.update_buttons()
+            self.last_completed = self.game.completed_locations.copy()
+
         bg = self.game.assets.get_image('map_bg')
         if bg:
             surface.blit(bg, (0,0))
@@ -1233,6 +1353,7 @@ class LocationScreen(Screen):
                 self.game.assets.play_sound('letter_collect')
             self.game.completed_locations.append(self.game.current_location_num)
             self.game.save_progress()
+            print(f"DEBUG: Локация {self.game.current_location_num} завершена. Пройденные локации: {self.game.completed_locations}")
         self.game.set_state('MAP')
 
     def handle_event(self, event):
