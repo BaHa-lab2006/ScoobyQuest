@@ -1,44 +1,37 @@
 # ==================== LIBRARY_GHOST_GAME.PY ====================
 """
 Игра "Дело о Призраке Библиотеки" для детей 6–7 лет.
-Реализация по полному сценарию.
-Модуль для встраивания в основное приложение.
-Не запускает собственный главный цикл, не вызывает pygame.init()/sys.exit().
+Полная версия, использующая ассеты из assets/game3/.
 """
 
 import pygame
-import pyodbc
 import json
 import os
 import random
-import logging
 import math
 from typing import Dict, List, Optional, Any, Tuple, Callable
 
-logger = logging.getLogger(__name__)
-
 # ---------- КОНФИГУРАЦИЯ ----------
-SCREEN_WIDTH = 1024
-SCREEN_HEIGHT = 768
+SCREEN_WIDTH = 1200
+SCREEN_HEIGHT = 800
 FPS = 60
 
 COLORS = {
     'WHITE': (255, 255, 255),
     'BLACK': (0, 0, 0),
     'DARK_BLUE': (25, 25, 112),
-    'BROWN': (139, 69, 19),
     'GOLD': (255, 215, 0),
     'GREEN': (0, 255, 0),
     'RED': (255, 0, 0),
     'GRAY': (128, 128, 128),
-    'BLUE': (25,25, 250),
+    'BLUE': (30, 144, 255),
     'LIGHT_BLUE': (173, 216, 230),
     'PURPLE': (128, 0, 128),
     'ORANGE': (255, 165, 0),
-    'LIGHT_GREEN': (144, 238, 144),
-    'DARK_GRAY': (64, 64, 64),
     'YELLOW': (255, 255, 0),
-    'PINK': (255, 192, 203),
+    'BROWN': (139, 69, 19),
+    'DARK_GRAY': (64, 64, 64),
+    'LIGHT_GREEN': (144, 238, 144),
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,134 +40,219 @@ IMAGES_PATH = os.path.join(ASSETS_PATH, "images")
 SOUNDS_PATH = os.path.join(ASSETS_PATH, "sounds")
 FONTS_PATH = os.path.join(ASSETS_PATH, "fonts")
 
+# Дополнительные пути
+BACKGROUNDS_PATH = os.path.join(IMAGES_PATH, "backgrounds")
+CHARACTERS_PATH = os.path.join(IMAGES_PATH, "characters")
+ITEMS_PATH = os.path.join(IMAGES_PATH, "items")
+MINIGAMES_PATH = os.path.join(IMAGES_PATH, "minigames")
+UI_PATH = os.path.join(IMAGES_PATH, "ui")
+MUSIC_PATH = os.path.join(SOUNDS_PATH, "music")
+SFX_PATH = os.path.join(SOUNDS_PATH, "sfx")
+VOICE_PATH = os.path.join(SOUNDS_PATH, "voice")
 
-# ---------- РАБОТА С БД (сохранение прогресса) ----------
-class Database:
-    def __init__(self, config: Dict):
-        self.config = config
-        self.conn = None
-        self.cursor = None
+PROGRESS_FILE = "library_progress.json"
 
-    def connect(self) -> bool:
-        try:
-            conn_str = (
-                f"DRIVER={self.config['driver']};"
-                f"SERVER={self.config['server']};"
-                f"DATABASE={self.config['database']};"
-                f"UID={self.config['username']};"
-                f"PWD={self.config['password']}"
-            )
-            self.conn = pyodbc.connect(conn_str)
-            self.cursor = self.conn.cursor()
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка подключения к БД: {e}")
-            return False
+def render_with_outline(text, font, color, outline_color, outline_width=2):
+    """Рисует текст с обводкой (тенью)"""
+    base = font.render(text, True, color)
+    outline = font.render(text, True, outline_color)
+    # Создаём поверхность с учётом обводки
+    w, h = base.get_width() + outline_width*2, base.get_height() + outline_width*2
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    # Рисуем обводку со смещениями
+    for dx in range(-outline_width, outline_width+1):
+        for dy in range(-outline_width, outline_width+1):
+            if dx != 0 or dy != 0:
+                surf.blit(outline, (dx+outline_width, dy+outline_width))
+    surf.blit(base, (outline_width, outline_width))
+    return surf
 
-    def init_tables(self):
-        # Упростим таблицы под нужды игры (можно оставить существующие)
-        pass
-
-    def get_child_progress(self, child_id: int, quest_id: int = 1) -> Dict:
-        # Для простоты будем хранить прогресс в JSON файле, если БД нет
-        # Но для совместимости оставим заглушку, возвращающую пустой прогресс
-        # Реальная реализация может использовать БД, как в исходном коде
-        return {
-            'completed_locations': [],
-            'collected_letters': '',
-            'current_location': 1,
-            'score': 0,
-            'stars_earned': 0,
-            'is_completed': False
-        }
-
-    def save_progress(self, child_id: int, quest_id: int, progress: Dict):
-        pass
-
-    def get_location(self, quest_id: int, loc_num: int) -> Optional[Dict]:
-        # Имитация данных локаций (в реальности берутся из БД)
-        locations = {
-            1: {'id': 1, 'name': 'Читальный зал', 'background': 'reading_hall.png', 'desc': '', 'npc_name': 'Библиотекарь', 'npc_dialogue': 'Помоги расставить книги по порядку!', 'letter': 'В'},
-            2: {'id': 2, 'name': 'Детский абонемент', 'background': 'kids_section.png', 'desc': '', 'npc_name': 'Скуби и Шэгги', 'npc_dialogue': 'Найди пару букв и составь число!', 'letter': 'О'},
-            3: {'id': 3, 'name': 'Книгохранилище', 'background': 'book_storage.png', 'desc': '', 'npc_name': 'Фред', 'npc_dialogue': 'Поставь правильное время и пройди лабиринт!', 'letter': 'Р'},
-            4: {'id': 4, 'name': 'Кабинет библиотекаря', 'background': 'office.png', 'desc': '', 'npc_name': 'Велма', 'npc_dialogue': 'Собери пазл и найди причину!', 'letter': 'О'},
-            5: {'id': 5, 'name': 'Подвал', 'background': 'basement.png', 'desc': '', 'npc_name': 'Скуби и Шэгги', 'npc_dialogue': 'Расшифруй слово и посчитай!', 'letter': 'Н'},
-            6: {'id': 6, 'name': 'Чердак', 'background': 'attic.png', 'desc': '', 'npc_name': 'Вся команда', 'npc_dialogue': 'Вот и наш призрак!', 'letter': 'А'},
-        }
-        return locations.get(loc_num)
-
-    def get_tasks(self, location_id: int) -> List[Dict]:
-        # В новой версии задания жёстко заданы в коде, а не в БД
-        # Этот метод возвращает пустой список, т.к. задания будут создаваться в LocationScreen
-        return []
-
-    def add_achievement(self, child_id: int, ach_name: str):
-        pass
-
-    def close(self):
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
-
-
-# ---------- КЭШ РЕСУРСОВ ----------
+# ---------- МЕНЕДЖЕР РЕСУРСОВ ----------
 class AssetCache:
     def __init__(self):
-        self.fonts: Dict[str, pygame.font.Font] = {}
         self.images: Dict[str, pygame.Surface] = {}
         self.sounds: Dict[str, pygame.mixer.Sound] = {}
+        self.fonts: Dict[str, pygame.font.Font] = {}
+        self._load_fonts()
+        self._load_images()
+        self._load_sounds()
 
-    def load_font(self, name: str, size: int, fallback: str = 'arial') -> pygame.font.Font:
+    def _load_fonts(self):
+        self.fonts['title'] = pygame.font.Font(None, 64)
+        self.fonts['large'] = pygame.font.Font(None, 48)
+        self.fonts['medium'] = pygame.font.Font(None, 36)
+        self.fonts['small'] = pygame.font.Font(None, 24)
         try:
-            path = os.path.join(FONTS_PATH, name)
-            return pygame.font.Font(path, size)
-        except Exception:
-            logger.warning(f"Шрифт {name} не найден, использую {fallback}")
-            return pygame.font.SysFont(fallback, size)
+            font_path = os.path.join(FONTS_PATH, "Chewy-Regular.ttf")
+            if os.path.exists(font_path):
+                self.fonts['title'] = pygame.font.Font(font_path, 64)
+                self.fonts['large'] = pygame.font.Font(font_path, 48)
+                self.fonts['medium'] = pygame.font.Font(font_path, 36)
+                self.fonts['small'] = pygame.font.Font(font_path, 24)
+        except:
+            pass
 
-    def load_image(self, key: str, subpath: str, size: Tuple[int, int] = None) -> pygame.Surface:
+    def _load_images(self):
+        # Фоны
+        self._load_image('prolog_bg', os.path.join(BACKGROUNDS_PATH, 'prolog_bg.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('map_bg', os.path.join(BACKGROUNDS_PATH, 'map_bg.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('reading_hall_bg', os.path.join(BACKGROUNDS_PATH, 'reading_hall.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('kids_section_bg', os.path.join(BACKGROUNDS_PATH, 'kids_section.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('book_storage_bg', os.path.join(BACKGROUNDS_PATH, 'book_storage.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('office_bg', os.path.join(BACKGROUNDS_PATH, 'office.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('basement_bg', os.path.join(BACKGROUNDS_PATH, 'basement.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('attic_bg', os.path.join(BACKGROUNDS_PATH, 'attic.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self._load_image('win_bg', os.path.join(BACKGROUNDS_PATH, 'win_bg.png'), (SCREEN_WIDTH, SCREEN_HEIGHT))
+        # Персонажи
+        self._load_image('daphne_normal', os.path.join(CHARACTERS_PATH, 'daphne_normal.png'), (200, 250))
+        self._load_image('fred_normal', os.path.join(CHARACTERS_PATH, 'fred_normal.png'), (200, 250))
+        self._load_image('fred_pointing', os.path.join(CHARACTERS_PATH, 'fred_pointing.png'), (200, 250))
+        self._load_image('librarian_normal', os.path.join(CHARACTERS_PATH, 'librarian_normal.png'), (200, 250))
+        self._load_image('librarian_worried', os.path.join(CHARACTERS_PATH, 'librarian_worried (1).png'), (200, 250))
+        self._load_image('raven_normal', os.path.join(CHARACTERS_PATH, 'raven_normal.png'), (150, 150))
+        self._load_image('raven_flying', os.path.join(CHARACTERS_PATH, 'raven_flying.png'), (150, 150))
+        self._load_image('shaggy_scooby_normal', os.path.join(CHARACTERS_PATH, 'shaggy_scooby_normal.png'), (250, 250))
+        self._load_image('shaggy_scooby_scared', os.path.join(CHARACTERS_PATH, 'shaggy_scooby_scared4.png'), (250, 250))
+        self._load_image('velma_normal', os.path.join(CHARACTERS_PATH, 'velma_normal.png'), (200, 250))
+        self._load_image('velma_thinking', os.path.join(CHARACTERS_PATH, 'velma_thinking.png'), (200, 250))
+        # Предметы для мини-игр
+        self._load_image('book_1', os.path.join(ITEMS_PATH, 'books', 'book_1.png'), (80, 100))
+        self._load_image('book_2', os.path.join(ITEMS_PATH, 'books', 'book_2.png'), (80, 100))
+        self._load_image('book_3', os.path.join(ITEMS_PATH, 'books', 'book_3.png'), (80, 100))
+        self._load_image('book_blue', os.path.join(ITEMS_PATH, 'books', 'book_blue.png'), (80, 100))
+        self._load_image('book_red', os.path.join(ITEMS_PATH, 'books', 'book_red.png'), (80, 100))
+        self._load_image('book_green', os.path.join(ITEMS_PATH, 'books', 'book_green.png'), (80, 100))
+        self._load_image('apple', os.path.join(ITEMS_PATH, 'math', 'apple.png'), (60, 60))
+        self._load_image('ball', os.path.join(ITEMS_PATH, 'math', 'ball.png'), (60, 60))
+        self._load_image('star', os.path.join(ITEMS_PATH, 'math', 'star.png'), (60, 60))
+        self._load_image('cookie', os.path.join(ITEMS_PATH, 'math', 'cookie.png'), (60, 60))
+        self._load_image('number_7', os.path.join(ITEMS_PATH, 'math', 'number_7.png'), (100, 100))
+        self._load_image('lamp', os.path.join(ITEMS_PATH, 'cause_effect', 'lamp.png'), (100, 100))
+        self._load_image('puddle', os.path.join(ITEMS_PATH, 'cause_effect', 'puddle.jpg'), (100, 100))
+        self._load_image('open_window', os.path.join(ITEMS_PATH, 'cause_effect', 'open_window.png'), (150, 150))
+        self._load_image('rain', os.path.join(ITEMS_PATH, 'cause_effect', 'rain.png'), (200, 150))
+        self._load_image('clock_face', os.path.join(ITEMS_PATH, 'clock', 'clock_face.png'), (300, 300))
+        self._load_image('clock_hour_hand', os.path.join(ITEMS_PATH, 'clock', 'clock_hour_hand.png'), (120, 120))
+        self._load_image('clock_min_hand', os.path.join(ITEMS_PATH, 'clock', 'clock_min_hand.png'), (150, 150))
+        self._load_image('puzzle_piece_1', os.path.join(ITEMS_PATH, 'puzzle', 'puzzle_piece_1.png'), (100, 100))
+        self._load_image('puzzle_piece_2', os.path.join(ITEMS_PATH, 'puzzle', 'puzzle_piece_2.png'), (100, 100))
+        self._load_image('puzzle_piece_3', os.path.join(ITEMS_PATH, 'puzzle', 'puzzle_piece_3.png'), (100, 100))
+        self._load_image('puzzle_piece_4', os.path.join(ITEMS_PATH, 'puzzle', 'puzzle_piece_4.png'), (100, 100))
+        self._load_image('paw_print', os.path.join(ITEMS_PATH, 'puzzle', 'paw_print_puzzle.jpg'), (400, 400))
+        self._load_image('bookshelf_maze', os.path.join(ITEMS_PATH, 'maze', 'bookshelf.png'), (70, 70))
+        self._load_image('exit_door', os.path.join(ITEMS_PATH, 'maze', 'exit_door.png'), (70, 70))
+        self._load_image('cap', os.path.join(ITEMS_PATH, 'rebus', 'cap-bg.png'), (100, 100))
+        self._load_image('fish', os.path.join(ITEMS_PATH, 'rebus', 'fish.png'), (100, 100))
+        self._load_image('swan', os.path.join(ITEMS_PATH, 'rebus', 'swan.png'), (100, 100))
+        self._load_image('rooster', os.path.join(ITEMS_PATH, 'rebus', 'rooster.png'), (100, 100))
+        self._load_image('watermelon', os.path.join(ITEMS_PATH, 'rebus', 'watermelon.png'), (100, 100))
+        # UI
+        self._load_image('door', os.path.join(UI_PATH, 'door.png'), (80, 120))
+        self._load_image('home_button', os.path.join(UI_PATH, 'home.png'), (50, 50))
+        self._load_image('button_normal', os.path.join(UI_PATH, 'button_normal.png'), (200, 60))
+        self._load_image('button_hover', os.path.join(UI_PATH, 'button_hover.png'), (200, 60))
+        self._load_image('letter_slot', os.path.join(UI_PATH, 'letter_slot.png'), (60, 60))
+
+    def _load_image(self, key, path, size=None):
         try:
-            path = os.path.join(IMAGES_PATH, subpath)
-            img = pygame.image.load(path)
+            img = pygame.image.load(path).convert_alpha()
             if size:
                 img = pygame.transform.scale(img, size)
             self.images[key] = img
-            return img
-        except Exception:
-            logger.warning(f"Изображение {subpath} не загружено")
+        except Exception as e:
+            print(f"Ошибка загрузки {path}: {e}")
             surf = pygame.Surface(size if size else (100, 100))
             surf.fill(COLORS['PURPLE'])
-            return surf
+            self.images[key] = surf
 
-    def load_sound(self, key: str, subpath: str) -> Optional[pygame.mixer.Sound]:
+    def _load_sounds(self):
+        self._load_sound('bg_music', os.path.join(MUSIC_PATH, 'background_music.mp3'))
+        self._load_sound('suspense', os.path.join(MUSIC_PATH, 'suspense_music.mp3'))
+        self._load_sound('victory', os.path.join(MUSIC_PATH, 'victory_music.mp3'))
+        self._load_sound('click', os.path.join(SFX_PATH, 'click.wav'))
+        self._load_sound('success', os.path.join(SFX_PATH, 'success.mp3'))
+        self._load_sound('fail', os.path.join(SFX_PATH, 'fail.wav'))
+        self._load_sound('book_move', os.path.join(SFX_PATH, 'book_move.wav'))
+        self._load_sound('bookshelf_move', os.path.join(SFX_PATH, 'bookshelf_move.wav'))
+        self._load_sound('clock_chime', os.path.join(SFX_PATH, 'clock_chime.wav'))
+        self._load_sound('clock_tick', os.path.join(SFX_PATH, 'clock_tick.wav'))
+        self._load_sound('puzzle_place', os.path.join(SFX_PATH, 'puzzle_place.flac'))
+        self._load_sound('puzzle_complete', os.path.join(SFX_PATH, 'puzzle_complete.wav'))
+        self._load_sound('raven_caw', os.path.join(SFX_PATH, 'raven_caw.aiff'))
+        self._load_sound('star_earn', os.path.join(SFX_PATH, 'star_earn.wav'))
+        self._load_sound('window_net', os.path.join(SFX_PATH, 'window_net.wav'))
+        self._load_sound('letter_collect', os.path.join(SFX_PATH, 'letter_collect.ogg'))
+        self._load_sound('map_open', os.path.join(SFX_PATH, 'map_open.wav'))
+        self._load_sound('transition', os.path.join(SFX_PATH, 'transition.wav'))
+        # Голоса
+        voice_files = [
+            'daphne_congrats', 'daphne_intro_1', 'fred_clock_success', 'fred_final', 'fred_intro_1',
+            'fred_maze_success', 'librarian_final', 'librarian_intro_1', 'librarian_success_1',
+            'librarian_task_1', 'scooby_basement_1', 'scooby_count_hint', 'scooby_intro_1',
+            'scooby_letter', 'scooby_math_hint', 'scooby_memory_success', 'scooby_rebus_success',
+            'shaggy_basement_1', 'shaggy_count_success', 'shaggy_intro_1', 'shaggy_math_success',
+            'shaggy_rebus_hint', 'velma_cause_success', 'velma_intro_1', 'velma_office_1',
+            'velma_puzzle_success', 'velma_reveal'
+        ]
+        for vf in voice_files:
+            path = os.path.join(VOICE_PATH, vf + '.wav')
+            self._load_sound(vf, path)
+
+    def _load_sound(self, key, path):
         try:
-            path = os.path.join(SOUNDS_PATH, subpath)
-            sound = pygame.mixer.Sound(path)
-            self.sounds[key] = sound
-            return sound
-        except Exception:
-            logger.warning(f"Звук {subpath} не загружен")
-            return None
+            self.sounds[key] = pygame.mixer.Sound(path)
+        except:
+            self.sounds[key] = None
+
+    def get_image(self, key):
+        return self.images.get(key)
+
+    def get_sound(self, key):
+        return self.sounds.get(key)
+
+    def play_sound(self, key, volume=0.7):
+        snd = self.get_sound(key)
+        if snd:
+            snd.set_volume(volume)
+            snd.play()
+
+    def play_voice(self, key, volume=0.8):
+        self.play_sound(key, volume)
+
+    def play_music(self, key, loop=-1, volume=0.4):
+        if key == 'bg_music':
+            try:
+                pygame.mixer.music.load(os.path.join(MUSIC_PATH, 'background_music.mp3'))
+                pygame.mixer.music.set_volume(volume)
+                pygame.mixer.music.play(loop)
+            except:
+                pass
+        else:
+            snd = self.get_sound(key)
+            if snd:
+                snd.play(loop)
+
+    def stop_music(self):
+        pygame.mixer.music.stop()
 
 
 # ---------- UI ЭЛЕМЕНТЫ ----------
 class Button:
     def __init__(self, rect: pygame.Rect, text: str, font: pygame.font.Font,
-                 color: Tuple, hover_color: Tuple, callback: Callable = None,
-                 border_color: Tuple = COLORS['WHITE'], border_width: int = 3):
+                 normal_color=(100, 100, 200), hover_color=(150, 150, 255), callback=None,
+                 image_normal=None, image_hover=None):
         self.rect = rect
         self.text = text
         self.font = font
-        self.color = color
+        self.normal_color = normal_color
         self.hover_color = hover_color
         self.callback = callback
-        self.border_color = border_color
-        self.border_width = border_width
+        self.image_normal = image_normal
+        self.image_hover = image_hover
         self.is_hovered = False
         self.enabled = True
 
-    def handle_event(self, event: pygame.event.Event):
+    def handle_event(self, event):
         if not self.enabled:
             return
         if event.type == pygame.MOUSEMOTION:
@@ -183,267 +261,244 @@ class Button:
             if self.is_hovered and self.callback:
                 self.callback()
 
-    def draw(self, surface: pygame.Surface):
-        color = self.hover_color if self.is_hovered else self.color
-        pygame.draw.rect(surface, color, self.rect, border_radius=12)
-        if self.border_width > 0:
-            pygame.draw.rect(surface, self.border_color, self.rect, self.border_width, border_radius=12)
-        text_surf = self.font.render(self.text, True, COLORS['WHITE'])
-        surface.blit(text_surf, text_surf.get_rect(center=self.rect.center))
+    def draw(self, surface):
+        if self.image_normal and self.is_hovered and self.image_hover:
+            surface.blit(self.image_hover, self.rect)
+        elif self.image_normal:
+            surface.blit(self.image_normal, self.rect)
+        else:
+            color = self.hover_color if self.is_hovered else self.normal_color
+            pygame.draw.rect(surface, color, self.rect, border_radius=12)
+            pygame.draw.rect(surface, COLORS['WHITE'], self.rect, 2, border_radius=12)
+        if self.text:
+            text_surf = self.font.render(self.text, True, COLORS['WHITE'])
+            surface.blit(text_surf, text_surf.get_rect(center=self.rect.center))
 
 
 class Label:
-    def __init__(self, pos: Tuple[int, int], text: str, font: pygame.font.Font, color: Tuple, center: bool = True):
+    def __init__(self, pos, text, font, color, center=True):
         self.pos = pos
         self.text = text
         self.font = font
         self.color = color
         self.center = center
-        self.surf = self.font.render(text, True, color)
+        self._update_surface()
 
-    def set_text(self, text: str):
+    def _update_surface(self):
+        self.surface = self.font.render(self.text, True, self.color)
+
+    def set_text(self, text):
         self.text = text
-        self.surf = self.font.render(text, True, self.color)
+        self._update_surface()
 
-    def draw(self, surface: pygame.Surface):
+    def draw(self, surface):
         if self.center:
-            rect = self.surf.get_rect(center=self.pos)
-            surface.blit(self.surf, rect)
+            rect = self.surface.get_rect(center=self.pos)
+            surface.blit(self.surface, rect)
         else:
-            surface.blit(self.surf, self.pos)
+            surface.blit(self.surface, self.pos)
 
 
 class DialogBubble:
-    def __init__(self, rect: pygame.Rect, text: str, speaker: str = "", font_small: pygame.font.Font = None):
+    def __init__(self, rect, text, speaker, font, assets):
         self.rect = rect
         self.text = text
         self.speaker = speaker
-        self.font_small = font_small
+        self.font = font
+        self.assets = assets
+        self._lines = self._wrap_text()
 
-    def draw(self, surface: pygame.Surface):
-        pygame.draw.rect(surface, COLORS['WHITE'], self.rect, border_radius=20)
-        pygame.draw.rect(surface, COLORS['BLACK'], self.rect, 3, border_radius=20)
-        if self.speaker and self.font_small:
-            sp_surf = self.font_small.render(self.speaker + ":", True, COLORS['PURPLE'])
-            surface.blit(sp_surf, (self.rect.x + 15, self.rect.y + 10))
-            text_y = self.rect.y + 45
-        else:
-            text_y = self.rect.y + 20
-        # Простой перенос слов
+    def _wrap_text(self):
         words = self.text.split(' ')
         lines = []
-        line = ""
-        for wd in words:
-            test_line = line + wd + " "
-            if self.font_small and self.font_small.size(test_line)[0] < self.rect.width - 30:
-                line = test_line
+        current = ''
+        max_width = self.rect.width - 40
+        for w in words:
+            test = current + w + ' '
+            if self.font.size(test)[0] <= max_width:
+                current = test
             else:
-                lines.append(line)
-                line = wd + " "
-        if line:
-            lines.append(line)
-        for i, ln in enumerate(lines):
-            if self.font_small:
-                txt = self.font_small.render(ln, True, COLORS['BLACK'])
-                surface.blit(txt, (self.rect.x + 15, text_y + i * 30))
+                lines.append(current)
+                current = w + ' '
+        if current:
+            lines.append(current)
+        return lines
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, COLORS['WHITE'], self.rect, border_radius=20)
+        pygame.draw.rect(surface, COLORS['BLACK'], self.rect, 3, border_radius=20)
+        name_surf = self.font.render(self.speaker + ':', True, COLORS['PURPLE'])
+        surface.blit(name_surf, (self.rect.x + 15, self.rect.y + 10))
+        y = self.rect.y + 50
+        for line in self._lines:
+            line_surf = self.font.render(line, True, COLORS['BLACK'])
+            surface.blit(line_surf, (self.rect.x + 15, y))
+            y += 30
 
 
-class Draggable:
-    def __init__(self, rect: pygame.Rect, image: pygame.Surface, data: Any):
-        self.rect = rect
-        self.image = image
-        self.data = data
-        self.dragging = False
-        self.drag_offset = (0, 0)
-
-    def handle_event(self, event: pygame.event.Event):
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            if self.rect.collidepoint(event.pos):
-                self.dragging = True
-                self.drag_offset = (self.rect.x - event.pos[0], self.rect.y - event.pos[1])
-        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-            self.dragging = False
-        elif event.type == pygame.MOUSEMOTION:
-            if self.dragging:
-                self.rect.x = event.pos[0] + self.drag_offset[0]
-                self.rect.y = event.pos[1] + self.drag_offset[1]
-
-    def draw(self, surface: pygame.Surface):
-        surface.blit(self.image, self.rect)
-
-
-# ---------- БАЗОВЫЙ КЛАСС МИНИ-ИГРЫ ----------
+# ---------- МИНИ-ИГРЫ (полная реализация по сценарию) ----------
+# Базовый класс
 class BaseMinigame:
-    def __init__(self, task_data: Dict, assets: AssetCache, on_complete: Callable):
-        self.task_data = task_data
+    def __init__(self, assets: AssetCache, on_complete: Callable[[bool], None]):
         self.assets = assets
-        self.on_complete = on_complete  # вызывается с bool (успех/провал)
+        self.on_complete = on_complete
         self.finished = False
-        self.ui_elements: List = []
+        self.ui_elements = []
         self.message_label = None
         self.message_timer = 0
 
-    def handle_event(self, event: pygame.event.Event):
+    def handle_event(self, event):
         for el in self.ui_elements:
             if hasattr(el, 'handle_event'):
                 el.handle_event(event)
 
-    def update(self, dt: float):
+    def update(self, dt):
         if self.message_timer > 0:
             self.message_timer -= dt
             if self.message_timer <= 0:
                 self.message_label = None
 
-    def draw(self, surface: pygame.Surface):
+    def draw(self, surface):
         for el in self.ui_elements:
             if hasattr(el, 'draw'):
                 el.draw(surface)
         if self.message_label:
             self.message_label.draw(surface)
 
-    def show_message(self, text: str, color=COLORS['RED'], duration=2.0):
-        self.message_label = Label((SCREEN_WIDTH//2, 100), text, self.assets.fonts.get('medium'), color)
+    def show_message(self, text, color=COLORS['RED'], duration=2.0):
+        self.message_label = Label((SCREEN_WIDTH//2, 100), text, self.assets.fonts['medium'], color)
         self.message_timer = duration
 
     def complete(self, success: bool):
-        self.on_complete(success)
+        if not self.finished:
+            self.finished = True
+            self.on_complete(success)
 
 
-# ---------- РЕАЛИЗАЦИИ МИНИ-ИГР ПО СЦЕНАРИЮ ----------
-# 1. ЧИТАЛЬНЫЙ ЗАЛ
+# 1.1 Расставь книги
 class SortBooksMinigame(BaseMinigame):
-    """Перетаскивание книг 3,1,2 в правильном порядке"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
-        self.slots = [None, None, None]  # позиции слева направо
-        self.books = []  # список Draggable
-        # Книги с цифрами
-        book_images = {}
-        for num in [1,2,3]:
-            surf = pygame.Surface((80,100))
-            surf.fill(COLORS['ORANGE'])
-            text = assets.fonts.get('medium').render(str(num), True, COLORS['BLACK'])
-            surf.blit(text, text.get_rect(center=(40,50)))
-            book_images[num] = surf
-        # Перемешанные книги: 3,1,2
-        positions = [(300,400), (450,400), (600,400)]
-        for i, num in enumerate([3,1,2]):
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
+        self.slots = [None, None, None]  # позиции 0,1,2
+        self.books = []
+        # Книги с цифрами 3,1,2 (перепутаны)
+        positions = [(300, 500), (450, 500), (600, 500)]
+        numbers = [3,1,2]
+        for i, num in enumerate(numbers):
+            img = assets.get_image(f'book_{num}')
+            if img is None:
+                img = pygame.Surface((80,100))
+                img.fill(COLORS['ORANGE'])
             rect = pygame.Rect(positions[i][0], positions[i][1], 80, 100)
-            draggable = Draggable(rect, book_images[num], num)
-            self.books.append(draggable)
-        self.ui_elements = self.books
-        # Проверочная кнопка
-        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 600, 120, 50), "Проверить",
-                                assets.fonts.get('small'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+            self.books.append({'img': img, 'rect': rect, 'num': num, 'dragging': False, 'drag_offset': (0,0)})
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
-        self.ui_elements.append(self.check_btn)
-
-    def check(self):
-        # Проверяем, что в слотах лежат книги 1,2,3 по порядку
-        correct = [1,2,3]
-        if self.slots == correct:
-            self.complete(True)
-        else:
-            self.show_message("Порядок должен быть 1, 2, 3! Попробуй ещё раз.")
+        self.ui_elements = self.books + [self.check_btn]
+        self.slot_rects = [
+            pygame.Rect(250, 300, 100, 120),
+            pygame.Rect(420, 300, 100, 120),
+            pygame.Rect(590, 300, 100, 120)
+        ]
 
     def handle_event(self, event):
         super().handle_event(event)
-        # Обработка отпускания книг над слотами
-        if event.type == pygame.MOUSEBUTTONUP:
-            for i, book in enumerate(self.books):
-                if book.dragging:
-                    book.dragging = False
-                    # Проверить попадание в слоты
-                    slot_rects = [
-                        pygame.Rect(200, 250, 100, 120),
-                        pygame.Rect(350, 250, 100, 120),
-                        pygame.Rect(500, 250, 100, 120)
-                    ]
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for b in self.books:
+                if b['rect'].collidepoint(event.pos):
+                    b['dragging'] = True
+                    b['drag_offset'] = (b['rect'].x - event.pos[0], b['rect'].y - event.pos[1])
+                    self.assets.play_sound('click')
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            for b in self.books:
+                if b['dragging']:
+                    b['dragging'] = False
+                    # Проверить попадание в слот
                     placed = False
-                    for idx, slot_rect in enumerate(slot_rects):
-                        if book.rect.colliderect(slot_rect):
-                            # Положить книгу в слот
-                            book.rect.center = slot_rect.center
-                            self.slots[idx] = book.data
+                    for idx, slot_rect in enumerate(self.slot_rects):
+                        if b['rect'].colliderect(slot_rect):
+                            # Положить в слот
+                            b['rect'].center = slot_rect.center
+                            self.slots[idx] = b['num']
                             placed = True
                             break
                     if not placed:
-                        # Вернуть в исходное положение (сохраним исходные координаты)
-                        # Упрощённо: не перемещаем обратно, просто оставляем где отпустили
-                        # Но для удобства вернём на место
-                        orig_positions = [(300,400), (450,400), (600,400)]
-                        for j, b in enumerate(self.books):
-                            if b == book:
-                                book.rect.topleft = orig_positions[j]
-                                break
-                    # Обновим слоты: очистим те, где книги больше нет
-                    for idx, slot_val in enumerate(self.slots):
-                        if slot_val == book.data and not any(b.data == slot_val and b.rect.colliderect(slot_rects[idx]) for b in self.books):
+                        # Вернуть в исходное
+                        orig_pos = [(300,500),(450,500),(600,500)][self.books.index(b)]
+                        b['rect'].topleft = orig_pos
+                    # Обновить слоты: удалить если книга ушла
+                    for idx, val in enumerate(self.slots):
+                        if val == b['num'] and not any(b2['num'] == val and b2['rect'].colliderect(self.slot_rects[idx]) for b2 in self.books):
                             self.slots[idx] = None
-                    break
+        elif event.type == pygame.MOUSEMOTION:
+            for b in self.books:
+                if b['dragging']:
+                    b['rect'].x = event.pos[0] + b['drag_offset'][0]
+                    b['rect'].y = event.pos[1] + b['drag_offset'][1]
+
+    def check(self):
+        if self.slots == [1,2,3]:
+            self.assets.play_sound('success')
+            self.complete(True)
+        else:
+            self.assets.play_sound('fail')
+            self.show_message("Нет, начни с единицы!", COLORS['RED'])
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        # Нарисовать полку и слоты
-        for i, pos in enumerate([(200,250), (350,250), (500,250)]):
-            rect = pygame.Rect(pos[0], pos[1], 100, 120)
+        # Рисуем полку с местами
+        for i, rect in enumerate(self.slot_rects):
             pygame.draw.rect(surface, COLORS['BROWN'], rect, 3)
             if self.slots[i] is not None:
                 num = self.slots[i]
-                surf = pygame.Surface((80,100))
-                surf.fill(COLORS['ORANGE'])
-                text = self.assets.fonts.get('medium').render(str(num), True, COLORS['BLACK'])
-                surf.blit(text, text.get_rect(center=(40,50)))
-                surface.blit(surf, rect)
-        # Нарисовать книги
-        for book in self.books:
-            book.draw(surface)
-        # Текст задания
-        q_text = self.assets.fonts.get('medium').render("Расставь книги по порядку: 1, 2, 3", True, COLORS['GOLD'])
-        surface.blit(q_text, (SCREEN_WIDTH//2 - q_text.get_width()//2, 50))
+                img = self.assets.get_image(f'book_{num}')
+                if img:
+                    surface.blit(img, rect)
+        # Рисуем книги снизу
+        for b in self.books:
+            surface.blit(b['img'], b['rect'])
+        title = self.assets.fonts['medium'].render("Расставь книги по порядку: 1, 2, 3", True, COLORS['GOLD'])
+        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         self.check_btn.draw(surface)
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
+# 1.2 Логический ряд
 class LogicRowMinigame(BaseMinigame):
-    """Логический ряд: красная, синяя, красная, ?"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.options = ["🔴 КНИГА", "🔵 КНИГА", "🟢 ТЕТРАДЬ"]
-        self.correct_index = 1
+        self.correct_idx = 1
         self.buttons = []
         for i, opt in enumerate(self.options):
-            btn = Button(pygame.Rect(300, 300 + i*80, 400, 60), opt,
-                         assets.fonts.get('medium'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+            btn = Button(pygame.Rect(300, 400 + i*70, 400, 60), opt,
+                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda i=i: self.check(i))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
 
     def check(self, idx):
-        if idx == self.correct_index:
+        if idx == self.correct_idx:
+            self.assets.play_sound('success')
             self.complete(True)
         else:
-            self.show_message("Посмотри внимательно: цвета чередуются. Красный, синий, красный... какой следующий?")
+            self.assets.play_sound('fail')
+            self.show_message("Посмотри внимательно: цвета чередуются. Красный, синий, красный… какой следующий?")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.assets.fonts.get('medium').render("Какой предмет следующий?", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Какой предмет следующий?", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 100))
-        # Показать ряд
         items = ["🔴 КНИГА", "🔵 КНИГА", "🔴 КНИГА", "?"]
-        x_start = 150
+        x_start = 200
         for i, it in enumerate(items):
-            txt = self.assets.fonts.get('small').render(it, True, COLORS['WHITE'])
-            surface.blit(txt, (x_start + i*150, 200))
+            txt = self.assets.fonts['small'].render(it, True, COLORS['WHITE'])
+            surface.blit(txt, (x_start + i*150, 250))
         super().draw(surface)
 
 
-# 2. ДЕТСКИЙ АБОНЕМЕНТ
+# 2.1 Состав числа
 class NumberCompositionMinigame(BaseMinigame):
-    """Состав числа 7 - выбрать пару картинок, дающих в сумме 7"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.pairs = [
             ("3 яблока + 4 яблока", 7, True),
             ("5 звёзд + 2 звезды", 7, True),
@@ -453,32 +508,32 @@ class NumberCompositionMinigame(BaseMinigame):
         ]
         self.buttons = []
         for i, (text, total, correct) in enumerate(self.pairs):
-            color = COLORS['LIGHT_BLUE']
-            btn = Button(pygame.Rect(200, 200 + i*70, 600, 50), text,
-                         assets.fonts.get('small'), color, COLORS['GREEN'],
+            btn = Button(pygame.Rect(200, 250 + i*60, 600, 50), text,
+                         assets.fonts['small'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda i=i: self.check(i))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
 
     def check(self, idx):
         if self.pairs[idx][2]:
+            self.assets.play_sound('success')
             self.complete(True)
         else:
+            self.assets.play_sound('fail')
             self.show_message("Семь — это три и четыре. Или пять и два. Попробуй ещё!")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.assets.fonts.get('medium').render("Выбери пару, которая в сумме даёт 7", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Выбери пару, которая в сумме даёт 7", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        big7 = self.assets.fonts.get('large').render("7", True, COLORS['YELLOW'])
+        big7 = self.assets.fonts['large'].render("7", True, COLORS['YELLOW'])
         surface.blit(big7, (SCREEN_WIDTH//2 - big7.get_width()//2, 120))
         super().draw(surface)
 
 
+# 2.2 Найди пару букв
 class MemoryLettersMinigame(BaseMinigame):
-    """Найди пару букв: карточки А,А,Б,В"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.cards = [('А', False), ('А', False), ('Б', False), ('В', False)]
         random.shuffle(self.cards)
         self.selected = None
@@ -487,7 +542,7 @@ class MemoryLettersMinigame(BaseMinigame):
         self.buttons = []
         for i in range(4):
             rect = pygame.Rect(200 + (i%2)*300, 300 + (i//2)*200, 150, 150)
-            btn = Button(rect, "", assets.fonts.get('large'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+            btn = Button(rect, "", assets.fonts['large'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda i=i: self.reveal(i))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
@@ -495,22 +550,19 @@ class MemoryLettersMinigame(BaseMinigame):
     def reveal(self, idx):
         if self.waiting or self.cards[idx][1]:
             return
-        # Переворачиваем карточку
         self.cards[idx] = (self.cards[idx][0], True)
+        self.assets.play_sound('click')
         if self.selected is None:
             self.selected = idx
         else:
-            # проверяем пару
             if self.cards[self.selected][0] == self.cards[idx][0]:
-                # успех
                 self.cards[self.selected] = (self.cards[self.selected][0], True)
                 self.cards[idx] = (self.cards[idx][0], True)
                 self.selected = None
-                # проверить, все ли открыты
                 if all(flipped for _, flipped in self.cards):
+                    self.assets.play_sound('success')
                     self.complete(True)
             else:
-                # не совпали, ждём и закрываем
                 self.waiting = True
                 self.wait_timer = 1.0
                 self.pending_idx = idx
@@ -520,58 +572,49 @@ class MemoryLettersMinigame(BaseMinigame):
         if self.waiting:
             self.wait_timer -= dt
             if self.wait_timer <= 0:
-                # закрыть обе карточки
                 self.cards[self.selected] = (self.cards[self.selected][0], False)
                 self.cards[self.pending_idx] = (self.cards[self.pending_idx][0], False)
                 self.selected = None
                 self.waiting = False
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.assets.fonts.get('medium').render("Найди пару одинаковых букв", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Найди пару одинаковых букв", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         for i, btn in enumerate(self.buttons):
             if self.cards[i][1]:
-                # показать букву
                 letter = self.cards[i][0]
-                text_surf = self.assets.fonts.get('large').render(letter, True, COLORS['BLACK'])
+                text_surf = self.assets.fonts['large'].render(letter, True, COLORS['BLACK'])
                 btn.color = COLORS['WHITE']
                 btn.draw(surface)
                 surface.blit(text_surf, text_surf.get_rect(center=btn.rect.center))
             else:
                 btn.draw(surface)
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
-# 3. КНИГОХРАНИЛИЩЕ
+# 3.1 Часы
 class ClockMinigame(BaseMinigame):
-    """Часы: перетащить часовую стрелку на 6"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.hour = 3
         self.dragging = False
-        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 600, 120, 50), "Проверить",
-                                assets.fonts.get('small'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
         self.ui_elements = [self.check_btn]
+        self.center = (SCREEN_WIDTH//2, 300)
 
     def handle_event(self, event):
         super().handle_event(event)
         if event.type == pygame.MOUSEBUTTONDOWN:
-            # Проверить, попали ли в стрелку
-            center = (SCREEN_WIDTH//2, 300)
-            angle = 360 - (self.hour % 12) * 30
-            rad = math.radians(angle)
-            end = (center[0] + 80 * math.cos(rad), center[1] - 80 * math.sin(rad))
-            # Простая проверка попадания в линию
-            if pygame.Rect(end[0]-10, end[1]-10, 20, 20).collidepoint(event.pos):
+            # Проверить попадание в часовую стрелку
+            angle = math.radians(90 - self.hour*30)
+            end = (self.center[0] + 80 * math.cos(angle), self.center[1] - 80 * math.sin(angle))
+            if pygame.Rect(end[0]-15, end[1]-15, 30, 30).collidepoint(event.pos):
                 self.dragging = True
         elif event.type == pygame.MOUSEMOTION and self.dragging:
-            # Вычислить новый час по углу
-            center = (SCREEN_WIDTH//2, 300)
-            dx = event.pos[0] - center[0]
-            dy = event.pos[1] - center[1]
+            dx = event.pos[0] - self.center[0]
+            dy = event.pos[1] - self.center[1]
             angle = math.degrees(math.atan2(-dy, dx))
             if angle < 0:
                 angle += 360
@@ -584,48 +627,47 @@ class ClockMinigame(BaseMinigame):
 
     def check(self):
         if self.hour == 6:
+            self.assets.play_sound('clock_chime')
+            self.assets.play_sound('success')
             self.complete(True)
         else:
-            self.show_message("Нужно поставить стрелку на 6 часов. Маленькая стрелка внизу, большая наверху.")
+            self.assets.play_sound('fail')
+            self.show_message("Не торопись. Шесть часов — это когда маленькая стрелка внизу, а большая наверху.")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        # Рисуем часы
-        center = (SCREEN_WIDTH//2, 300)
-        pygame.draw.circle(surface, COLORS['WHITE'], center, 150, 5)
-        # Рисуем деления
+        # Циферблат
+        pygame.draw.circle(surface, COLORS['WHITE'], self.center, 150, 5)
         for i in range(1, 13):
             angle = math.radians(90 - i*30)
-            x1 = center[0] + 130 * math.cos(angle)
-            y1 = center[1] - 130 * math.sin(angle)
-            x2 = center[0] + 145 * math.cos(angle)
-            y2 = center[1] - 145 * math.sin(angle)
+            x1 = self.center[0] + 130 * math.cos(angle)
+            y1 = self.center[1] - 130 * math.sin(angle)
+            x2 = self.center[0] + 145 * math.cos(angle)
+            y2 = self.center[1] - 145 * math.sin(angle)
             pygame.draw.line(surface, COLORS['BLACK'], (x1,y1), (x2,y2), 3)
-            num = self.assets.fonts.get('small').render(str(i), True, COLORS['BLACK'])
-            x_text = center[0] + 115 * math.cos(angle) - num.get_width()//2
-            y_text = center[1] - 115 * math.sin(angle) - num.get_height()//2
+            num = self.assets.fonts['small'].render(str(i), True, COLORS['BLACK'])
+            x_text = self.center[0] + 115 * math.cos(angle) - num.get_width()//2
+            y_text = self.center[1] - 115 * math.sin(angle) - num.get_height()//2
             surface.blit(num, (x_text, y_text))
         # Часовая стрелка
         angle = math.radians(90 - self.hour*30)
-        end = (center[0] + 80 * math.cos(angle), center[1] - 80 * math.sin(angle))
-        pygame.draw.line(surface, COLORS['BLACK'], center, end, 8)
-        # Минутная стрелка (всегда на 12)
-        end_min = (center[0], center[1] - 110)
-        pygame.draw.line(surface, COLORS['BLACK'], center, end_min, 4)
+        end = (self.center[0] + 80 * math.cos(angle), self.center[1] - 80 * math.sin(angle))
+        pygame.draw.line(surface, COLORS['BLACK'], self.center, end, 8)
+        # Минутная на 12
+        end_min = (self.center[0], self.center[1] - 110)
+        pygame.draw.line(surface, COLORS['BLACK'], self.center, end_min, 4)
         self.check_btn.draw(surface)
-        title = self.assets.fonts.get('medium').render("Поставь время 6 часов", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Поставь время 6 часов", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
+# 3.2 Лабиринт (передвинь стеллаж)
 class MazeMinigame(BaseMinigame):
-    """Лабиринт 4x4, передвинуть стеллаж к выходу"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
-        self.grid = [[0]*4 for _ in range(4)]  # 0 - пусто, 1 - стена
-        # Стены (простой лабиринт)
-        # Определим стены между клетками (список препятствий)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
+        self.pos = (0,0)
+        self.target = (3,3)
+        # Стены: для каждой клетки направления
         self.walls = {
             (0,0): {'right': False, 'down': True},
             (1,0): {'left': False, 'right': False, 'down': True},
@@ -644,13 +686,15 @@ class MazeMinigame(BaseMinigame):
             (2,3): {'left': False, 'right': False, 'up': False},
             (3,3): {'left': False, 'up': True},
         }
-        self.pos = (0,0)
-        self.target = (3,3)
         self.buttons = []
-        btn_up = Button(pygame.Rect(SCREEN_WIDTH//2-30, 500, 60, 50), "↑", assets.fonts.get('large'), COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,-1))
-        btn_down = Button(pygame.Rect(SCREEN_WIDTH//2-30, 600, 60, 50), "↓", assets.fonts.get('large'), COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,1))
-        btn_left = Button(pygame.Rect(SCREEN_WIDTH//2-90, 550, 60, 50), "←", assets.fonts.get('large'), COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(-1,0))
-        btn_right = Button(pygame.Rect(SCREEN_WIDTH//2+30, 550, 60, 50), "→", assets.fonts.get('large'), COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(1,0))
+        btn_up = Button(pygame.Rect(SCREEN_WIDTH//2-30, 550, 60, 50), "↑", assets.fonts['large'],
+                        COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,-1))
+        btn_down = Button(pygame.Rect(SCREEN_WIDTH//2-30, 650, 60, 50), "↓", assets.fonts['large'],
+                          COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,1))
+        btn_left = Button(pygame.Rect(SCREEN_WIDTH//2-90, 600, 60, 50), "←", assets.fonts['large'],
+                          COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(-1,0))
+        btn_right = Button(pygame.Rect(SCREEN_WIDTH//2+30, 600, 60, 50), "→", assets.fonts['large'],
+                           COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(1,0))
         self.buttons = [btn_up, btn_down, btn_left, btn_right]
         self.ui_elements = self.buttons
 
@@ -658,26 +702,32 @@ class MazeMinigame(BaseMinigame):
         nx, ny = self.pos[0]+dx, self.pos[1]+dy
         if nx < 0 or nx >= 4 or ny < 0 or ny >= 4:
             self.show_message("Там стена!")
+            self.assets.play_sound('fail')
             return
-        # Проверка стены между текущей и соседней клеткой
+        # Проверка стены
         if dx == 1 and self.walls[self.pos].get('right', False):
             self.show_message("Там стена!")
+            self.assets.play_sound('fail')
             return
         if dx == -1 and self.walls[(nx, ny)].get('right', False):
             self.show_message("Там стена!")
+            self.assets.play_sound('fail')
             return
         if dy == 1 and self.walls[self.pos].get('down', False):
             self.show_message("Там стена!")
+            self.assets.play_sound('fail')
             return
         if dy == -1 and self.walls[(nx, ny)].get('down', False):
             self.show_message("Там стена!")
+            self.assets.play_sound('fail')
             return
         self.pos = (nx, ny)
+        self.assets.play_sound('bookshelf_move')
         if self.pos == self.target:
+            self.assets.play_sound('success')
             self.complete(True)
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
         cell_size = 80
         offset_x = (SCREEN_WIDTH - 4*cell_size)//2
         offset_y = 150
@@ -692,152 +742,161 @@ class MazeMinigame(BaseMinigame):
                     color = COLORS['LIGHT_BLUE']
                 pygame.draw.rect(surface, color, rect)
                 pygame.draw.rect(surface, COLORS['BLACK'], rect, 2)
-                # Рисуем стены
+                # Стены
                 if self.walls[(x,y)].get('right', False):
                     pygame.draw.line(surface, COLORS['RED'], (rect.right, rect.top), (rect.right, rect.bottom), 3)
                 if self.walls[(x,y)].get('down', False):
                     pygame.draw.line(surface, COLORS['RED'], (rect.left, rect.bottom), (rect.right, rect.bottom), 3)
-        title = self.assets.fonts.get('medium').render("Проведи стеллаж к выходу (золотая клетка)", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Проведи стеллаж к выходу (золотая клетка)", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         for btn in self.buttons:
             btn.draw(surface)
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
-# 4. КАБИНЕТ БИБЛИОТЕКАРЯ
+# 4.1 Пазл (след лапы)
 class PuzzleMinigame(BaseMinigame):
-    """Пазл следа лапы из 4 частей"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
-        # Создаём изображение пазла (заглушка)
-        full_image = pygame.Surface((200,200))
-        full_image.fill(COLORS['GRAY'])
-        # Рисуем след лапы
-        pygame.draw.circle(full_image, COLORS['BLACK'], (100,100), 40)
-        pygame.draw.circle(full_image, COLORS['BLACK'], (70,70), 15)
-        pygame.draw.circle(full_image, COLORS['BLACK'], (130,70), 15)
-        pygame.draw.circle(full_image, COLORS['BLACK'], (70,130), 15)
-        pygame.draw.circle(full_image, COLORS['BLACK'], (130,130), 15)
-        # Разрезаем на 4 части
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
+        # 4 части пазла
         self.pieces = []
-        for i in range(2):
-            for j in range(2):
-                rect = pygame.Rect(i*100, j*100, 100, 100)
-                piece = full_image.subsurface(rect).copy()
-                self.pieces.append(piece)
+        self.slots = [None, None, None, None]
+        # Картинка целиком (для отображения)
+        self.full_image = assets.get_image('paw_print')
+        if self.full_image:
+            self.full_image = pygame.transform.scale(self.full_image, (400,400))
+        # Создаём кусочки из полной картинки (если есть) иначе заглушки
+        piece_rects = [(0,0,200,200), (200,0,200,200), (0,200,200,200), (200,200,200,200)]
+        for i, rect in enumerate(piece_rects):
+            if self.full_image:
+                piece = self.full_image.subsurface(pygame.Rect(rect))
+            else:
+                piece = pygame.Surface((200,200))
+                piece.fill(COLORS['GRAY'])
+            self.pieces.append(piece)
         random.shuffle(self.pieces)
-        self.slots = [None]*4
-        self.draggables = []
-        for idx, piece in enumerate(self.pieces):
-            rect = pygame.Rect(600 + (idx%2)*100, 300 + (idx//2)*100, 100, 100)
-            d = Draggable(rect, piece, idx)
-            self.draggables.append(d)
-        self.ui_elements = self.draggables
-        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 600, 120, 50), "Проверить",
-                                assets.fonts.get('small'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+        # Позиции кусочков справа
+        self.piece_rects = []
+        start_x = 750
+        start_y = 200
+        for i in range(4):
+            rect = pygame.Rect(start_x, start_y + i*110, 100, 100)
+            self.piece_rects.append({'img': pygame.transform.scale(self.pieces[i], (100,100)), 'rect': rect, 'idx': i, 'dragging': False, 'drag_offset': (0,0)})
+        self.slot_rects = [
+            pygame.Rect(200, 200, 100, 100),
+            pygame.Rect(320, 200, 100, 100),
+            pygame.Rect(200, 320, 100, 100),
+            pygame.Rect(320, 320, 100, 100)
+        ]
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
-        self.ui_elements.append(self.check_btn)
-
-    def check(self):
-        if all(s is not None for s in self.slots) and len(set(self.slots))==4:
-            self.complete(True)
-        else:
-            self.show_message("Собери все части в рамку!")
+        self.ui_elements = self.piece_rects + [self.check_btn]
 
     def handle_event(self, event):
         super().handle_event(event)
-        if event.type == pygame.MOUSEBUTTONUP:
-            for d in self.draggables:
-                if d.dragging:
-                    d.dragging = False
-                    # Попадание в слоты
-                    slot_rects = [pygame.Rect(200, 250, 100, 100), pygame.Rect(320, 250, 100, 100),
-                                   pygame.Rect(200, 370, 100, 100), pygame.Rect(320, 370, 100, 100)]
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            for p in self.piece_rects:
+                if p['rect'].collidepoint(event.pos):
+                    p['dragging'] = True
+                    p['drag_offset'] = (p['rect'].x - event.pos[0], p['rect'].y - event.pos[1])
+        elif event.type == pygame.MOUSEBUTTONUP:
+            for p in self.piece_rects:
+                if p['dragging']:
+                    p['dragging'] = False
                     placed = False
-                    for idx, slot in enumerate(slot_rects):
-                        if d.rect.colliderect(slot):
-                            d.rect.center = slot.center
-                            self.slots[idx] = d.data
+                    for idx, slot_rect in enumerate(self.slot_rects):
+                        if p['rect'].colliderect(slot_rect):
+                            p['rect'].center = slot_rect.center
+                            self.slots[idx] = p['idx']
                             placed = True
                             break
                     if not placed:
-                        # вернуть в исходное
-                        orig = [(600,300), (700,300), (600,400), (700,400)]
-                        for i, dd in enumerate(self.draggables):
-                            if dd == d:
-                                d.rect.topleft = orig[i]
-                                break
-                    # очистить слоты, где больше нет части
+                        # Вернуть в исходное
+                        orig_x = 750 + (p['idx']%2)*110
+                        orig_y = 200 + (p['idx']//2)*110
+                        p['rect'].topleft = (orig_x, orig_y)
+                    # Очистить слоты
                     for idx, val in enumerate(self.slots):
-                        if val is not None and not any(d.data == val and d.rect.colliderect(slot_rects[idx]) for d in self.draggables):
+                        if val == p['idx'] and not any(p2['idx'] == val and p2['rect'].colliderect(self.slot_rects[idx]) for p2 in self.piece_rects):
                             self.slots[idx] = None
-                    break
+        elif event.type == pygame.MOUSEMOTION:
+            for p in self.piece_rects:
+                if p['dragging']:
+                    p['rect'].x = event.pos[0] + p['drag_offset'][0]
+                    p['rect'].y = event.pos[1] + p['drag_offset'][1]
+
+    def check(self):
+        if all(s is not None for s in self.slots):
+            self.assets.play_sound('puzzle_complete')
+            self.complete(True)
+        else:
+            self.assets.play_sound('fail')
+            self.show_message("Собери все части в рамку!")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        # Рамка для сборки
-        for i, rect in enumerate([(200,250), (320,250), (200,370), (320,370)]):
-            pygame.draw.rect(surface, COLORS['WHITE'], (*rect,100,100), 3)
-            if self.slots[i] is not None:
-                # отобразить часть
-                piece = self.pieces[self.slots[i]]
-                surface.blit(piece, rect)
-        for d in self.draggables:
-            d.draw(surface)
-        title = self.assets.fonts.get('medium').render("Собери след лапы", True, COLORS['GOLD'])
+        # Рамка
+        for rect in self.slot_rects:
+            pygame.draw.rect(surface, COLORS['WHITE'], rect, 3)
+            if self.slots[ self.slot_rects.index(rect) ] is not None:
+                idx = self.slots[ self.slot_rects.index(rect) ]
+                surface.blit(pygame.transform.scale(self.pieces[idx], (100,100)), rect)
+        for p in self.piece_rects:
+            surface.blit(p['img'], p['rect'])
+        title = self.assets.fonts['medium'].render("Собери след лапы", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         self.check_btn.draw(surface)
+        super().draw(surface)
 
 
+# 4.2 Причина-Следствие
 class CauseEffectMinigame(BaseMinigame):
-    """Причина-следствие: выбрать лужу"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.options = ["Лужа на полу", "Горящая лампа", "Закрытая книга"]
         self.correct = 0
         self.buttons = []
         for i, opt in enumerate(self.options):
-            btn = Button(pygame.Rect(300, 300 + i*80, 400, 60), opt,
-                         assets.fonts.get('medium'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+            btn = Button(pygame.Rect(300, 400 + i*70, 400, 60), opt,
+                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda i=i: self.check(i))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
 
     def check(self, idx):
         if idx == self.correct:
+            self.assets.play_sound('success')
             self.complete(True)
         else:
+            self.assets.play_sound('fail')
             self.show_message("Если окно открыто и идёт дождь — что случится с полом?")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.assets.fonts.get('medium').render("Выбери правильное следствие", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Выбери правильное следствие", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        # Изображение причины: открытое окно, дождь
-        cause_text = self.assets.fonts.get('small').render("Открытое окно идёт дождь", True, COLORS['WHITE'])
+        # Изображение причины
+        cause_text = self.assets.fonts['small'].render("Открытое окно идёт дождь", True, COLORS['WHITE'])
         surface.blit(cause_text, (SCREEN_WIDTH//2 - cause_text.get_width()//2, 150))
         super().draw(surface)
 
 
-# 5. ПОДВАЛ
+# 5.1 Ребус
 class RebusMinigame(BaseMinigame):
-    """Ребус: картинки -> буквы, слово КРОНА"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
-        self.pictures = [("🧢", "К"), ("🐟", "Р"), ("🦢", "О"), ("🐓", "Н"), ("🍉", "А")]
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
+        self.pictures = [("cap", "К"), ("fish", "Р"), ("swan", "О"), ("rooster", "Н"), ("watermelon", "А")]
         self.user_letters = ["", "", "", "", ""]
         self.current_slot = 0
         self.keyboard_buttons = []
         letters = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
-        x_start = 200
+        x_start = 150
         for i, ch in enumerate(letters):
             btn = Button(pygame.Rect(x_start + (i%10)*60, 500 + (i//10)*60, 50, 50), ch,
-                         assets.fonts.get('small'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+                         assets.fonts['small'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda c=ch: self.add_letter(c))
             self.keyboard_buttons.append(btn)
         self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
-                                assets.fonts.get('small'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
         self.ui_elements = self.keyboard_buttons + [self.check_btn]
 
@@ -845,53 +904,52 @@ class RebusMinigame(BaseMinigame):
         if self.current_slot < 5:
             self.user_letters[self.current_slot] = ch
             self.current_slot += 1
+            self.assets.play_sound('click')
 
     def check(self):
         word = "".join(self.user_letters)
         if word == "КРОНА":
+            self.assets.play_sound('success')
             self.complete(True)
         else:
+            self.assets.play_sound('fail')
             self.show_message("Первая буква — как в слове 'кепка'. Вторая — как в 'рыба'... Попробуй ещё!")
 
-    def handle_event(self, event):
-        super().handle_event(event)
-        if event.type == pygame.KEYDOWN and event.unicode.isalpha():
-            self.add_letter(event.unicode.upper())
-
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        for i, (pic, correct) in enumerate(self.pictures):
+        for i, (pic_key, correct) in enumerate(self.pictures):
             x = 150 + i*130
-            # Картинка
-            pic_surf = self.assets.fonts.get('large').render(pic, True, COLORS['WHITE'])
-            surface.blit(pic_surf, (x, 150))
+            img = self.assets.get_image(pic_key)
+            if img:
+                surface.blit(img, (x, 150))
+            else:
+                txt = self.assets.fonts['large'].render(pic_key[0].upper(), True, COLORS['WHITE'])
+                surface.blit(txt, (x+30, 180))
             # Слот для буквы
-            rect = pygame.Rect(x+20, 250, 60, 60)
+            rect = pygame.Rect(x+30, 280, 60, 60)
             pygame.draw.rect(surface, COLORS['WHITE'], rect)
             pygame.draw.rect(surface, COLORS['BLACK'], rect, 2)
             if self.user_letters[i]:
-                letter_surf = self.assets.fonts.get('large').render(self.user_letters[i], True, COLORS['BLACK'])
+                letter_surf = self.assets.fonts['large'].render(self.user_letters[i], True, COLORS['BLACK'])
                 surface.blit(letter_surf, letter_surf.get_rect(center=rect.center))
-        title = self.assets.fonts.get('medium').render("Напиши слово по картинкам", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Напиши слово по картинкам", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         for btn in self.keyboard_buttons:
             btn.draw(surface)
         self.check_btn.draw(surface)
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
+# 5.2 Счёт до 20 (чётные)
 class EvenNumbersMinigame(BaseMinigame):
-    """Нажми на все чётные числа от 1 до 20"""
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.clicked = [False]*21
         self.buttons = []
         for i in range(1, 21):
             x = 100 + ((i-1)%5)*120
             y = 200 + ((i-1)//5)*80
             btn = Button(pygame.Rect(x, y, 80, 60), str(i),
-                         assets.fonts.get('medium'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda n=i: self.click_number(n))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
@@ -899,27 +957,28 @@ class EvenNumbersMinigame(BaseMinigame):
     def click_number(self, n):
         if n % 2 == 0 and not self.clicked[n]:
             self.clicked[n] = True
+            self.assets.play_sound('click')
             if all(self.clicked[i] for i in range(2,21,2)):
+                self.assets.play_sound('success')
                 self.complete(True)
         elif n % 2 != 0:
-            self.show_message("Чётные — те, что делятся на два. Два, четыре, шесть... А это нечётное!")
+            self.assets.play_sound('fail')
+            self.show_message("Чётные — те, что делятся на два. Два, четыре, шесть… А это нечётное!")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.assets.fonts.get('medium').render("Нажми на все чётные числа от 1 до 20", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render("Нажми на все чётные числа от 1 до 20", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         for i, btn in enumerate(self.buttons):
             if self.clicked[i+1]:
-                btn.color = COLORS['GREEN']
+                btn.normal_color = COLORS['GREEN']
             btn.draw(surface)
-        if self.message_label:
-            self.message_label.draw(surface)
+        super().draw(surface)
 
 
-# 6. ЧЕРДАК (финал) - викторина
+# 6. Финальная викторина
 class FinalQuizMinigame(BaseMinigame):
-    def __init__(self, task_data, assets, on_complete):
-        super().__init__(task_data, assets, on_complete)
+    def __init__(self, assets, on_complete):
+        super().__init__(assets, on_complete)
         self.questions = [
             ("Кто оставил чернильные следы?", ["Библиотекарь", "Ворона", "Собака"], 1),
             ("Почему ворона залетела в библиотеку?", ["Хотела украсть книги", "Окно было разбито", "Ей было скучно"], 1),
@@ -927,16 +986,14 @@ class FinalQuizMinigame(BaseMinigame):
         ]
         self.current_q = 0
         self.buttons = []
-        self.next_btn = None
         self.setup_question()
 
     def setup_question(self):
         self.buttons = []
         q_text, options, _ = self.questions[self.current_q]
-        # Показываем вопрос и варианты
         for i, opt in enumerate(options):
-            btn = Button(pygame.Rect(300, 300 + i*80, 400, 60), opt,
-                         self.assets.fonts.get('medium'), COLORS['LIGHT_BLUE'], COLORS['GREEN'],
+            btn = Button(pygame.Rect(300, 350 + i*70, 400, 60), opt,
+                         self.assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
                          callback=lambda i=i: self.answer(i))
             self.buttons.append(btn)
         self.ui_elements = self.buttons
@@ -944,31 +1001,33 @@ class FinalQuizMinigame(BaseMinigame):
     def answer(self, idx):
         _, _, correct = self.questions[self.current_q]
         if idx == correct:
+            self.assets.play_sound('click')
             self.current_q += 1
             if self.current_q >= len(self.questions):
+                self.assets.play_sound('success')
                 self.complete(True)
             else:
                 self.setup_question()
         else:
+            self.assets.play_sound('fail')
             self.show_message("Подумай, как решить проблему, чтобы всем было хорошо — и птице, и книгам.")
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
         if self.current_q < len(self.questions):
             q_text, _, _ = self.questions[self.current_q]
-            q_surf = self.assets.fonts.get('medium').render(q_text, True, COLORS['GOLD'])
-            surface.blit(q_surf, (SCREEN_WIDTH//2 - q_surf.get_width()//2, 150))
+            q_surf = self.assets.fonts['medium'].render(q_text, True, COLORS['GOLD'])
+            surface.blit(q_surf, (SCREEN_WIDTH//2 - q_surf.get_width()//2, 200))
         super().draw(surface)
 
 
-# ---------- ЭКРАНЫ ----------
+# ---------- ОСНОВНЫЕ ЭКРАНЫ ----------
 class Screen:
-    def __init__(self, game: 'LibraryGame'):
+    def __init__(self, game):
         self.game = game
 
-    def handle_event(self, event: pygame.event.Event): pass
-    def update(self, dt: float): pass
-    def draw(self, surface: pygame.Surface): pass
+    def handle_event(self, event): pass
+    def update(self, dt): pass
+    def draw(self, surface): pass
 
 
 class LoadingScreen(Screen):
@@ -982,10 +1041,14 @@ class LoadingScreen(Screen):
             self.game.set_state('PROLOG')
 
     def draw(self, surface):
-        surface.fill(COLORS['DARK_BLUE'])
-        title = self.game.assets.fonts.get('title').render("Дело о Призраке Библиотеки", True, COLORS['GOLD'])
+        bg = self.game.assets.get_image('prolog_bg')
+        if bg:
+            surface.blit(bg, (0,0))
+        else:
+            surface.fill(COLORS['DARK_BLUE'])
+        title = self.game.assets.fonts['title'].render("Дело о Призраке Библиотеки", True, COLORS['GOLD'])
         surface.blit(title, title.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 50)))
-        load = self.game.assets.fonts.get('small').render("Загрузка...", True, COLORS['WHITE'])
+        load = self.game.assets.fonts['small'].render("Загрузка...", True, COLORS['WHITE'])
         surface.blit(load, load.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50)))
 
 
@@ -998,7 +1061,7 @@ class PrologScreen(Screen):
             ("Велма", "Знаки на полу похожи на отпечатки… но не человеческие. Если пройдём все комнаты и решим загадки — узнаем правду.")
         ]
         self.step = 0
-        self.font = game.assets.fonts.get('small')
+        self.font = game.assets.fonts['small']
         self.next_btn = Button(pygame.Rect(SCREEN_WIDTH-150, SCREEN_HEIGHT-70, 100, 40), "Далее",
                                self.font, COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                callback=self.next_step)
@@ -1006,10 +1069,10 @@ class PrologScreen(Screen):
 
     def next_step(self):
         self.step += 1
+        self.game.assets.play_sound('click')
         if self.step >= len(self.dialogs):
-            # Показать кнопку "Начать расследование"
             self.start_btn = Button(pygame.Rect(SCREEN_WIDTH//2-120, SCREEN_HEIGHT-100, 240, 60), "Начать расследование",
-                                    self.game.assets.fonts.get('medium'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+                                    self.game.assets.fonts['medium'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                     callback=lambda: self.game.set_state('MAP'))
             self.next_btn.enabled = False
 
@@ -1019,14 +1082,14 @@ class PrologScreen(Screen):
             self.start_btn.handle_event(event)
 
     def draw(self, surface):
-        bg = self.game.assets.images.get('prolog_bg.png')
+        bg = self.game.assets.get_image('prolog_bg')
         if bg:
             surface.blit(bg, (0,0))
         else:
             surface.fill(COLORS['DARK_BLUE'])
         if self.step < len(self.dialogs):
             speaker, text = self.dialogs[self.step]
-            bubble = DialogBubble(pygame.Rect(100, SCREEN_HEIGHT-180, SCREEN_WIDTH-200, 120), text, speaker, self.font)
+            bubble = DialogBubble(pygame.Rect(100, SCREEN_HEIGHT-180, SCREEN_WIDTH-200, 120), text, speaker, self.font, self.game.assets)
             bubble.draw(surface)
             self.next_btn.draw(surface)
         else:
@@ -1048,7 +1111,7 @@ class MapScreen(Screen):
         self.buttons = []
         self.update_buttons()
         self.home_btn = Button(pygame.Rect(30, SCREEN_HEIGHT-60, 100, 40), "Домой",
-                               game.assets.fonts.get('small'), COLORS['RED'], COLORS['ORANGE'],
+                               game.assets.fonts['small'], COLORS['RED'], COLORS['ORANGE'],
                                callback=self.game.exit_game)
 
     def update_buttons(self):
@@ -1056,8 +1119,13 @@ class MapScreen(Screen):
         for num, name, x, y, letter in self.locations:
             available = (num == 1) or (num-1 in self.game.completed_locations)
             completed = num in self.game.completed_locations
-            color = COLORS['GREEN'] if completed else (COLORS['LIGHT_BLUE'] if available else COLORS['GRAY'])
-            btn = Button(pygame.Rect(x, y, 180, 100), name, self.game.assets.fonts.get('small'),
+            if completed:
+                color = COLORS['GREEN']
+            elif available:
+                color = COLORS['LIGHT_BLUE']
+            else:
+                color = COLORS['GRAY']
+            btn = Button(pygame.Rect(x, y, 180, 100), name, self.game.assets.fonts['small'],
                          color, color, callback=lambda n=num: self.go_to_location(n))
             btn.enabled = available and not completed
             self.buttons.append(btn)
@@ -1072,18 +1140,16 @@ class MapScreen(Screen):
         self.home_btn.handle_event(event)
 
     def draw(self, surface):
-        bg = self.game.assets.images.get('map_bg.jpg')
+        bg = self.game.assets.get_image('map_bg')
         if bg:
             surface.blit(bg, (0,0))
         else:
             surface.fill(COLORS['BROWN'])
-        title = self.game.assets.fonts.get('title').render("Карта библиотеки", True, COLORS['GOLD'])
+        title = render_with_outline("Карта библиотеки", self.game.assets.fonts['title'], COLORS['GOLD'], COLORS['BLACK'], 2)
         surface.blit(title, title.get_rect(center=(SCREEN_WIDTH//2, 50)))
         letters_str = ' '.join(list(self.game.collected_letters.ljust(6, '_')))
-        lett_surf = self.game.assets.fonts.get('medium').render(f"Буквы: {letters_str}", True, COLORS['WHITE'])
+        lett_surf = render_with_outline(f"Буквы: {letters_str}", self.game.assets.fonts['medium'], COLORS['WHITE'], COLORS['BLACK'], 2)
         surface.blit(lett_surf, (150, 110))
-        score_surf = self.game.assets.fonts.get('medium').render(f"Очки: {self.game.score}", True, COLORS['GOLD'])
-        surface.blit(score_surf, (SCREEN_WIDTH-100, 110))
         for btn in self.buttons:
             btn.draw(surface)
         self.home_btn.draw(surface)
@@ -1092,20 +1158,20 @@ class MapScreen(Screen):
 class LocationScreen(Screen):
     def __init__(self, game):
         super().__init__(game)
-        self.tasks = []  # список заданий в этой локации
+        self.tasks = []
         self.task_buttons = []
         self.loc = None
-        self.completed_tasks = []  # id выполненных заданий (внутренние)
+        self.completed_tasks = []
         self.back_btn = Button(pygame.Rect(50, SCREEN_HEIGHT-60, 120, 40), "На карту",
-                               game.assets.fonts.get('small'), COLORS['GRAY'], COLORS['LIGHT_BLUE'],
+                               game.assets.fonts['small'], COLORS['GRAY'], COLORS['LIGHT_BLUE'],
                                callback=self.exit_location)
 
     def on_enter(self):
-        self.loc = self.game.db.get_location(self.game.quest_id, self.game.current_location_num)
+        self.loc = self.game.get_location_data(self.game.current_location_num)
         if not self.loc:
             self.game.set_state('MAP')
             return
-        # Определяем задания для локации
+        # Задания для каждой локации
         if self.game.current_location_num == 1:
             self.tasks = [
                 {'id': 'sort', 'name': 'Расставь книги', 'minigame_class': SortBooksMinigame},
@@ -1123,7 +1189,7 @@ class LocationScreen(Screen):
             ]
         elif self.game.current_location_num == 4:
             self.tasks = [
-                {'id': 'puzzle', 'name': 'Пазл записи', 'minigame_class': PuzzleMinigame},
+                {'id': 'puzzle', 'name': 'Пазл следа', 'minigame_class': PuzzleMinigame},
                 {'id': 'cause', 'name': 'Причина-Следствие', 'minigame_class': CauseEffectMinigame}
             ]
         elif self.game.current_location_num == 5:
@@ -1135,21 +1201,22 @@ class LocationScreen(Screen):
             self.tasks = [
                 {'id': 'final', 'name': 'Раскрыть дело!', 'minigame_class': FinalQuizMinigame}
             ]
-        # Загружаем сохранённые выполненные задания
         self.completed_tasks = self.game.location_tasks_completed.get(self.game.current_location_num, [])
         self.update_task_buttons()
+        # Диалог при входе
+        dialog_text = self.loc.get('npc_dialogue', "Помоги мне!")
+        speaker = self.loc.get('npc_name', "Библиотекарь")
         self.dialog_bubble = DialogBubble(pygame.Rect(50, SCREEN_HEIGHT-160, SCREEN_WIDTH-100, 100),
-                                          self.loc['npc_dialogue'], self.loc['npc_name'],
-                                          self.game.assets.fonts.get('small'))
+                                          dialog_text, speaker, self.game.assets.fonts['small'], self.game.assets)
 
     def update_task_buttons(self):
         self.task_buttons = []
         for t in self.tasks:
             completed = t['id'] in self.completed_tasks
             color = COLORS['GREEN'] if completed else COLORS['LIGHT_BLUE']
-            btn = Button(pygame.Rect(200, 180 + len(self.task_buttons)*70, 600, 50),
+            btn = Button(pygame.Rect(200, 200 + len(self.task_buttons)*70, 600, 50),
                          f"Задание: {t['name']}",
-                         self.game.assets.fonts.get('small'), color, COLORS['LIGHT_GREEN'] if not completed else color,
+                         self.game.assets.fonts['small'], color, COLORS['LIGHT_GREEN'] if not completed else color,
                          callback=lambda task=t: self.start_task(task) if not completed else None)
             btn.enabled = not completed
             self.task_buttons.append(btn)
@@ -1158,13 +1225,12 @@ class LocationScreen(Screen):
         self.game.set_state('TASK', task=task, location_num=self.game.current_location_num)
 
     def exit_location(self):
-        # Проверяем, все ли задания выполнены, чтобы выдать букву
         all_completed = all(t['id'] in self.completed_tasks for t in self.tasks)
         if all_completed and self.game.current_location_num not in self.game.completed_locations:
-            # Выдаём букву
-            letter = self.loc['letter']
-            if letter not in self.game.collected_letters:
+            letter = self.loc.get('letter', '')
+            if letter:
                 self.game.collected_letters += letter
+                self.game.assets.play_sound('letter_collect')
             self.game.completed_locations.append(self.game.current_location_num)
             self.game.save_progress()
         self.game.set_state('MAP')
@@ -1175,13 +1241,13 @@ class LocationScreen(Screen):
         self.back_btn.handle_event(event)
 
     def draw(self, surface):
-        bg = self.game.assets.images.get(self.loc['background']) if self.loc else None
+        bg = self.game.assets.get_image(self.loc['background']) if self.loc else None
         if bg:
             surface.blit(bg, (0,0))
         else:
             surface.fill(COLORS['DARK_BLUE'])
         if self.loc:
-            name_surf = self.game.assets.fonts.get('title').render(self.loc['name'], True, COLORS['GOLD'])
+            name_surf = self.game.assets.fonts['title'].render(self.loc['name'], True, COLORS['GOLD'])
             surface.blit(name_surf, name_surf.get_rect(center=(SCREEN_WIDTH//2, 40)))
         self.dialog_bubble.draw(surface)
         for btn in self.task_buttons:
@@ -1194,15 +1260,14 @@ class TaskScreen(Screen):
         super().__init__(game)
         self.task = task
         self.location_num = location_num
-        self.minigame = task['minigame_class'](task, game.assets, self._on_task_complete)
+        self.minigame = task['minigame_class'](game.assets, self._on_task_complete)
         self.back_btn = Button(pygame.Rect(50, SCREEN_HEIGHT-60, 100, 40), "Назад",
-                               game.assets.fonts.get('small'), COLORS['GRAY'], COLORS['LIGHT_BLUE'],
+                               game.assets.fonts['small'], COLORS['GRAY'], COLORS['LIGHT_BLUE'],
                                callback=lambda: game.set_state('LOCATION'))
 
     def _on_task_complete(self, success):
         if success:
-            self.game.score += 10  # очки за задание
-            # Сохраняем выполненное задание для текущей локации
+            # Сохраняем выполнение задания
             if self.location_num not in self.game.location_tasks_completed:
                 self.game.location_tasks_completed[self.location_num] = []
             if self.task['id'] not in self.game.location_tasks_completed[self.location_num]:
@@ -1210,7 +1275,6 @@ class TaskScreen(Screen):
             self.game.save_progress()
             self.game.set_state('LOCATION')
         else:
-            # Можно показать сообщение, но остаться в мини-игре
             self.minigame.show_message("Попробуй ещё раз!", COLORS['RED'])
 
     def handle_event(self, event):
@@ -1221,6 +1285,18 @@ class TaskScreen(Screen):
         self.minigame.update(dt)
 
     def draw(self, surface):
+        # Рисуем фон локации
+        loc = self.game.get_location_data(self.location_num)
+        if loc:
+            bg_key = loc.get('background')
+            bg = self.game.assets.get_image(bg_key)
+            if bg:
+                surface.blit(bg, (0, 0))
+        # Затемнение
+        dark = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        dark.fill((0, 0, 0, 180))  # полупрозрачный чёрный
+        surface.blit(dark, (0, 0))
+        # Отрисовка мини-игры
         self.minigame.draw(surface)
         self.back_btn.draw(surface)
 
@@ -1228,13 +1304,13 @@ class TaskScreen(Screen):
 class WinScreen(Screen):
     def __init__(self, game):
         super().__init__(game)
-        self.font_title = game.assets.fonts.get('title')
-        self.font_large = game.assets.fonts.get('large')
+        self.font_title = game.assets.fonts['title']
+        self.font_large = game.assets.fonts['large']
         self.btn_reward = Button(pygame.Rect(SCREEN_WIDTH//2-200, 500, 180, 60), "Забрать награду",
-                                 game.assets.fonts.get('medium'), COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+                                 game.assets.fonts['medium'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                  callback=self.game.finish_game)
         self.btn_replay = Button(pygame.Rect(SCREEN_WIDTH//2+20, 500, 180, 60), "Играть ещё раз",
-                                 game.assets.fonts.get('medium'), COLORS['BLUE'], COLORS['LIGHT_BLUE'],
+                                 game.assets.fonts['medium'], COLORS['BLUE'], COLORS['LIGHT_BLUE'],
                                  callback=self.game.reset_game)
 
     def handle_event(self, event):
@@ -1242,7 +1318,7 @@ class WinScreen(Screen):
         self.btn_replay.handle_event(event)
 
     def draw(self, surface):
-        bg = self.game.assets.images.get('win_bg.jpg')
+        bg = self.game.assets.get_image('win_bg')
         if bg:
             surface.blit(bg, (0,0))
         else:
@@ -1270,24 +1346,11 @@ class LibraryGame:
         self.on_exit = on_exit or (lambda: None)
         self.on_finish = on_finish or (lambda: None)
 
-        self.db = Database(db_config)
-        self.db.connect()
-        self.quest_id = 1
-
         self.assets = AssetCache()
-        self._load_fonts()
-        self._load_images()
-        self._load_sounds()
+        self.assets.play_music('bg_music', loop=-1)
 
         # Прогресс
-        progress = self.db.get_child_progress(self.child_id, self.quest_id)
-        self.completed_locations = progress['completed_locations']
-        self.collected_letters = progress['collected_letters']
-        self.current_location_num = progress['current_location']
-        self.score = progress['score']
-        self.stars = progress['stars_earned']
-        self.location_tasks_completed = {}  # локально, можно сохранять в БД при желании
-
+        self.load_progress()
         self.state_name = 'LOADING'
         self.current_screen = None
         self.running = True
@@ -1301,27 +1364,40 @@ class LibraryGame:
         }
         self.set_state('LOADING')
 
-    def _load_fonts(self):
-        self.assets.fonts['title'] = self.assets.load_font("Chewy-Regular.ttf", 64)
-        self.assets.fonts['large'] = self.assets.load_font("ComicNeue-Bold.ttf", 48)
-        self.assets.fonts['medium'] = self.assets.load_font("ComicNeue-Bold.ttf", 36)
-        self.assets.fonts['small'] = self.assets.load_font("ComicNeue-Regular.ttf", 24)
+    def get_location_data(self, loc_num):
+        locations = {
+            1: {'name': 'Читальный зал', 'background': 'reading_hall_bg', 'npc_name': 'Библиотекарь', 'npc_dialogue': 'Ох, эти книги совсем расшалились! Помоги расставить их по порядку, и я покажу тебе странные знаки.', 'letter': 'В'},
+            2: {'name': 'Детский абонемент', 'background': 'kids_section_bg', 'npc_name': 'Шэгги', 'npc_dialogue': 'Мы тут нашли какие-то странные следы… Но сначала — задания!', 'letter': 'О'},
+            3: {'name': 'Книгохранилище', 'background': 'book_storage_bg', 'npc_name': 'Фред', 'npc_dialogue': 'Чтобы поймать призрака, нужно знать время и уметь двигать стеллажи. Готов?', 'letter': 'Р'},
+            4: {'name': 'Кабинет библиотекаря', 'background': 'office_bg', 'npc_name': 'Велма', 'npc_dialogue': 'Я нашла странные записи и разлитые чернила. Давай разбираться по порядку.', 'letter': 'О'},
+            5: {'name': 'Подвал', 'background': 'basement_bg', 'npc_name': 'Скуби', 'npc_dialogue': 'С-с-страшно, но мы храбрые! Там на стене какие-то символы. Может, шифр?', 'letter': 'Н'},
+            6: {'name': 'Чердак', 'background': 'attic_bg', 'npc_name': 'Велма', 'npc_dialogue': 'Смотрите! Следы ведут к окну. А на стене — символы… такие же, как внизу.', 'letter': 'А'}
+        }
+        return locations.get(loc_num)
 
-    def _load_images(self):
-        bg_names = ['prolog_bg.png', 'map_bg.png', 'reading_hall.png', 'kids_section.png',
-                    'book_storage.png', 'office.png', 'basement.png', 'attic.png', 'win_bg.png']
-        for name in bg_names:
-            self.assets.load_image(name, f"backgrounds/{name}", (SCREEN_WIDTH, SCREEN_HEIGHT))
+    def load_progress(self):
+        try:
+            with open(PROGRESS_FILE, 'r') as f:
+                data = json.load(f)
+                self.completed_locations = data.get('completed_locations', [])
+                self.collected_letters = data.get('collected_letters', '')
+                self.location_tasks_completed = data.get('location_tasks_completed', {})
+                self.stars = data.get('stars', 0)
+        except:
+            self.completed_locations = []
+            self.collected_letters = ''
+            self.location_tasks_completed = {}
+            self.stars = 0
 
-    def _load_sounds(self):
-        self.assets.load_sound('bg_music', "music/background_music.mp3")
-        if 'bg_music' in self.assets.sounds:
-            try:
-                pygame.mixer.music.load(os.path.join(SOUNDS_PATH, "music/background_music.mp3"))
-                pygame.mixer.music.set_volume(0.4)
-                pygame.mixer.music.play(-1)
-            except:
-                pass
+    def save_progress(self):
+        data = {
+            'completed_locations': self.completed_locations,
+            'collected_letters': self.collected_letters,
+            'location_tasks_completed': self.location_tasks_completed,
+            'stars': self.stars,
+        }
+        with open(PROGRESS_FILE, 'w') as f:
+            json.dump(data, f)
 
     def set_state(self, state: str, **kwargs):
         self.state_name = state
@@ -1347,38 +1423,22 @@ class LibraryGame:
         if self.current_screen:
             self.current_screen.draw(self.surface)
 
-    def save_progress(self):
-        progress = {
-            'completed_locations': self.completed_locations,
-            'collected_letters': self.collected_letters,
-            'current_location': self.current_location_num,
-            'score': self.score,
-            'stars_earned': self.stars,
-            'is_completed': (self.state_name == 'WIN'),
-        }
-        self.db.save_progress(self.child_id, self.quest_id, progress)
-
     def exit_game(self):
         self.save_progress()
         self.running = False
-        self.db.close()
         self.on_exit()
 
     def finish_game(self):
         self.stars = 1
         self.save_progress()
-        self.db.add_achievement(self.child_id, "Детектив библиотеки")
         self.running = False
-        self.db.close()
         self.on_finish()
 
     def reset_game(self):
         self.completed_locations = []
-        self.collected_letters = ""
-        self.current_location_num = 1
-        self.score = 0
-        self.stars = 0
+        self.collected_letters = ''
         self.location_tasks_completed = {}
+        self.stars = 0
         self.save_progress()
         self.set_state('PROLOG')
 
