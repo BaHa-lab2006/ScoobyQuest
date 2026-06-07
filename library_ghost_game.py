@@ -612,34 +612,168 @@ class LogicRowMinigame(BaseMinigame):
 class NumberCompositionMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.pairs = [
-            ("3 яблока + 4 яблока", 7, True),
-            ("5 звёзд + 2 звезды", 7, True),
-            ("6 мячей + 1 мяч", 7, True),
-            ("2 яблока + 3 яблока", 5, False),
-            ("4 звезды + 4 звезды", 8, False)
-        ]
-        self.buttons = []
-        for i, (text, total, correct) in enumerate(self.pairs):
-            btn = Button(pygame.Rect(200, 250 + i*60, 600, 50), text,
-                         assets.fonts['small'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
-                         callback=lambda i=i: self.check(i))
-            self.buttons.append(btn)
-        self.ui_elements = self.buttons
+        self.types = ['apple', 'ball', 'cookie']
+        self.sprites = {}
+        for t in self.types:
+            img = assets.get_image(t)
+            if img is None:
+                surf = pygame.Surface((25, 25), pygame.SRCALPHA)
+                color = {'apple': (255, 0, 0), 'ball': (255, 165, 0), 'cookie': (139, 69, 19)}[t]
+                pygame.draw.circle(surf, color, (12, 12), 12)
+                img = surf
+            self.sprites[t] = img
 
-    def check(self, idx):
-        if self.pairs[idx][2]:
-            self.assets.play_sound('success')
-            self.complete(True)
-        else:
-            self.assets.play_sound('fail')
-            self.show_message("Семь — это три и четыре. Или пять и два. Попробуй ещё!")
+        self.seven_img = assets.get_image('number_7')
+        if self.seven_img is None:
+            self.seven_img = pygame.Surface((50, 50), pygame.SRCALPHA)
+            font = assets.fonts['large']
+            seven_text = font.render("7", True, COLORS['GOLD'])
+            self.seven_img.blit(seven_text, (5, 5))
+
+        self.groups = {}
+        self.combined_sevens = {}
+        self.layout()
+        self.dragging = None
+        self.drag_offset = (0, 0)
+        self.completed_types = set()
+        self.message_label = None
+        self.message_timer = 0
+
+    def layout(self):
+        type_positions = {
+            'apple': 150,
+            'ball': SCREEN_WIDTH // 2 - 55,
+            'cookie': SCREEN_WIDTH - 260
+        }
+        y_start = 150
+        y_step = 200
+        for t in self.types:
+            x = random.randint(1, 5)
+            y = 7 - x
+            if y == x:
+                x = random.choice([1,2,3])
+                y = 7 - x
+            possible_z = [i for i in range(1,7) if i != x and i != y and (i + x) != 7 and (i + y) != 7]
+            z = random.choice(possible_z) if possible_z else 3
+            counts = [x, y, z]
+            random.shuffle(counts)
+
+            self.groups[t] = []
+            for idx, cnt in enumerate(counts):
+                rect = pygame.Rect(type_positions[t], y_start + idx * y_step, 110, 100)
+                self.groups[t].append({
+                    'count': cnt,
+                    'rect': rect,
+                    'original_pos': (rect.x, rect.y),
+                    'active': True,
+                    'locked': False,
+                    'combined': False
+                })
+
+    def _draw_group(self, surface, sprite, count, rect, combined=False):
+        w, h = 60, 60
+        step_x = 35   # горизонтальный шаг
+        step_y = 35   # вертикальный шаг
+
+        rows = 0
+        while (rows * (rows + 1)) // 2 < count:
+            rows += 1
+
+        # Ширина и высота всей пирамиды
+        total_width = (rows - 1) * step_x + w
+        total_height = (rows - 1) * step_y + h
+        start_x = rect.centerx - total_width // 2
+        start_y = rect.centery - total_height // 2
+
+        drawn = 0
+        min_x = min_y = float('inf')
+        max_x = max_y = float('-inf')
+
+        for row in range(rows):
+            items_in_row = row + 1
+            if drawn + items_in_row > count:
+                items_in_row = count - drawn
+            row_width = (items_in_row - 1) * step_x + w
+            row_start_x = rect.centerx - row_width // 2
+            for col in range(items_in_row):
+                x = row_start_x + col * step_x
+                y = start_y + row * step_y
+                surface.blit(sprite, (x, y))
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x + w)
+                max_y = max(max_y, y + h)
+                drawn += 1
+                if drawn >= count:
+                    break
+            if drawn >= count:
+                break
+
+        if drawn > 0:
+            box_rect = pygame.Rect(min_x - 5, min_y - 5, max_x - min_x + 10, max_y - min_y + 10)
+            color = COLORS['GOLD'] if combined else COLORS['WHITE']
+            pygame.draw.rect(surface, color, box_rect, 3)
+
+    def handle_event(self, event):
+        super().handle_event(event)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for t in self.types:
+                for idx, g in enumerate(self.groups[t]):
+                    if g['active'] and not g['locked'] and g['rect'].collidepoint(event.pos):
+                        self.dragging = (t, idx)
+                        self.drag_offset = (g['rect'].x - event.pos[0], g['rect'].y - event.pos[1])
+                        self.assets.play_sound('click')
+                        break
+                if self.dragging:
+                    break
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            if self.dragging:
+                t, idx = self.dragging
+                g = self.groups[t][idx]
+                target = None
+                for i, other in enumerate(self.groups[t]):
+                    if i != idx and other['active'] and not other['locked'] and other['rect'].colliderect(g['rect']):
+                        target = other
+                        break
+                if target and (g['count'] + target['count'] == 7):
+                    self.assets.play_sound('success')
+                    # Помечаем группы как заблокированные (нельзя перетаскивать)
+                    for grp in self.groups[t]:
+                        grp['locked'] = True
+                        grp['combined'] = True
+                    # Находим третью группу и делаем неактивной
+                    for third in self.groups[t]:
+                        if third != g and third != target:
+                            third['active'] = False
+                    # Вычисляем позицию для семёрки между центрами
+                    center_x = (g['rect'].centerx + target['rect'].centerx) // 2
+                    center_y = (g['rect'].centery + target['rect'].centery) // 2
+                    self.combined_sevens[t] = (center_x, center_y)
+                    self.completed_types.add(t)
+                    if len(self.completed_types) == 3:
+                        self.complete(True)
+                else:
+                    g['rect'].x, g['rect'].y = g['original_pos']
+                    self.assets.play_sound('fail')
+                    self.show_message("Сложи две группы одного предмета, чтобы получилось 7!", COLORS['RED'], 2)
+                self.dragging = None
+        elif event.type == pygame.MOUSEMOTION:
+            if self.dragging:
+                t, idx = self.dragging
+                g = self.groups[t][idx]
+                g['rect'].x = event.pos[0] + self.drag_offset[0]
+                g['rect'].y = event.pos[1] + self.drag_offset[1]
 
     def draw(self, surface):
-        title = self.assets.fonts['medium'].render("Выбери пару, которая в сумме даёт 7", True, COLORS['GOLD'])
-        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        big7 = self.assets.fonts['large'].render("7", True, COLORS['YELLOW'])
-        surface.blit(big7, (SCREEN_WIDTH//2 - big7.get_width()//2, 120))
+        for t in self.types:
+            for g in self.groups[t]:
+                if not g['active']:
+                    continue
+                self._draw_group(surface, self.sprites[t], g['count'], g['rect'], g['combined'])
+        for t, pos in self.combined_sevens.items():
+            if self.seven_img:
+                rect = self.seven_img.get_rect(center=pos)
+                surface.blit(self.seven_img, rect)
         super().draw(surface)
 
 
