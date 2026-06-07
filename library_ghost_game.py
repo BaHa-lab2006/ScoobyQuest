@@ -840,7 +840,7 @@ class MemoryLettersMinigame(BaseMinigame):
                     self.complete(True)
             else:
                 self.waiting = True
-                self.wait_timer = 1000
+                self.wait_timer = 750
                 self.pending_flip_back = [self.selected_index, idx]
                 self.selected_index = None
 
@@ -883,67 +883,108 @@ class MemoryLettersMinigame(BaseMinigame):
 class ClockMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.hour = 3
-        self.dragging = False
-        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+        self.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50)
+        self.radius = 150
+
+        # Возможные целевые времена
+        possible_times = [(h, m) for h in range(1, 13) for m in (0, 15, 30, 45)]
+        self.target_time = random.choice(possible_times)
+        # Начальное случайное, отличное от целевого
+        start_options = [t for t in possible_times if t != self.target_time]
+        self.start_time = random.choice(start_options)
+        self.current_hour, self.current_min = self.start_time
+
+        self.dragging = None  # 'hour' или 'minute'
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2 - 60, SCREEN_HEIGHT - 100, 120, 50), "Проверить",
                                 assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                 callback=self.check)
         self.ui_elements = [self.check_btn]
-        self.center = (SCREEN_WIDTH//2, 300)
+
+    def _angle_to_time(self, angle_deg, is_hour):
+        """Преобразует угол (0° = вверх, по часовой стрелке) в часы (1-12) или минуты (0-59)."""
+        if is_hour:
+            # 1 час = 30 градусов
+            hour = (angle_deg / 30) % 12
+            return 12 if hour < 0.5 else int(round(hour))
+        else:
+            minute = (angle_deg / 6) % 60
+            return int(round(minute))
+
+    def _time_to_angle(self, hour, minute, is_hour):
+        if is_hour:
+            return (hour % 12) * 30
+        else:
+            return minute * 6
 
     def handle_event(self, event):
         super().handle_event(event)
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            # Проверить попадание в часовую стрелку
-            angle = math.radians(90 - self.hour*30)
-            end = (self.center[0] + 80 * math.cos(angle), self.center[1] - 80 * math.sin(angle))
-            if pygame.Rect(end[0]-15, end[1]-15, 30, 30).collidepoint(event.pos):
-                self.dragging = True
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Вычисляем позиции стрелок
+            angle_h = self._time_to_angle(self.current_hour, self.current_min, True)
+            rad_h = math.radians(90 - angle_h)
+            end_h = (self.center[0] + 80 * math.cos(rad_h), self.center[1] - 80 * math.sin(rad_h))
+            angle_m = self._time_to_angle(self.current_hour, self.current_min, False)
+            rad_m = math.radians(90 - angle_m)
+            end_m = (self.center[0] + 110 * math.cos(rad_m), self.center[1] - 110 * math.sin(rad_m))
+
+            if pygame.Rect(end_h[0]-15, end_h[1]-15, 30, 30).collidepoint(event.pos):
+                self.dragging = 'hour'
+            elif pygame.Rect(end_m[0]-15, end_m[1]-15, 30, 30).collidepoint(event.pos):
+                self.dragging = 'minute'
+
         elif event.type == pygame.MOUSEMOTION and self.dragging:
             dx = event.pos[0] - self.center[0]
             dy = event.pos[1] - self.center[1]
-            angle = math.degrees(math.atan2(-dy, dx))
+            # Угол от вертикали (вверх = 0°) по часовой стрелке
+            angle = math.degrees(math.atan2(dx, -dy))  # исправлено для правильного направления
             if angle < 0:
                 angle += 360
-            hour = round(angle / 30) % 12
-            if hour == 0:
-                hour = 12
-            self.hour = hour
+            if self.dragging == 'hour':
+                self.current_hour = self._angle_to_time(angle, True)
+            elif self.dragging == 'minute':
+                self.current_min = self._angle_to_time(angle, False)
+
         elif event.type == pygame.MOUSEBUTTONUP:
-            self.dragging = False
+            self.dragging = None
 
     def check(self):
-        if self.hour == 6:
+        if (self.current_hour, self.current_min) == self.target_time:
             self.assets.play_sound('clock_chime')
             self.assets.play_sound('success')
             self.complete(True)
         else:
             self.assets.play_sound('fail')
-            self.show_message("Не торопись. Шесть часов — это когда маленькая стрелка внизу, а большая наверху.")
+            self.show_message(f"Нужно поставить {self.target_time[0]}:{self.target_time[1]:02d}", COLORS['RED'])
 
     def draw(self, surface):
         # Циферблат
-        pygame.draw.circle(surface, COLORS['WHITE'], self.center, 150, 5)
+        pygame.draw.circle(surface, COLORS['WHITE'], self.center, self.radius, 3)
         for i in range(1, 13):
-            angle = math.radians(90 - i*30)
-            x1 = self.center[0] + 130 * math.cos(angle)
-            y1 = self.center[1] - 130 * math.sin(angle)
-            x2 = self.center[0] + 145 * math.cos(angle)
-            y2 = self.center[1] - 145 * math.sin(angle)
-            pygame.draw.line(surface, COLORS['BLACK'], (x1,y1), (x2,y2), 3)
-            num = self.assets.fonts['small'].render(str(i), True, COLORS['BLACK'])
-            x_text = self.center[0] + 115 * math.cos(angle) - num.get_width()//2
-            y_text = self.center[1] - 115 * math.sin(angle) - num.get_height()//2
+            angle = math.radians(90 - i * 30)
+            x1 = self.center[0] + (self.radius - 20) * math.cos(angle)
+            y1 = self.center[1] - (self.radius - 20) * math.sin(angle)
+            x2 = self.center[0] + (self.radius - 5) * math.cos(angle)
+            y2 = self.center[1] - (self.radius - 5) * math.sin(angle)
+            pygame.draw.line(surface, COLORS['WHITE'], (x1, y1), (x2, y2), 2)
+            num = self.assets.fonts['small'].render(str(i), True, COLORS['WHITE'])
+            x_text = self.center[0] + (self.radius - 35) * math.cos(angle) - num.get_width() // 2
+            y_text = self.center[1] - (self.radius - 35) * math.sin(angle) - num.get_height() // 2
             surface.blit(num, (x_text, y_text))
-        # Часовая стрелка
-        angle = math.radians(90 - self.hour*30)
-        end = (self.center[0] + 80 * math.cos(angle), self.center[1] - 80 * math.sin(angle))
-        pygame.draw.line(surface, COLORS['BLACK'], self.center, end, 8)
-        # Минутная на 12
-        end_min = (self.center[0], self.center[1] - 110)
-        pygame.draw.line(surface, COLORS['BLACK'], self.center, end_min, 4)
+
+        # Часовая стрелка (белая)
+        angle_h = self._time_to_angle(self.current_hour, self.current_min, True)
+        rad_h = math.radians(90 - angle_h)
+        end_h = (self.center[0] + 80 * math.cos(rad_h), self.center[1] - 80 * math.sin(rad_h))
+        pygame.draw.line(surface, COLORS['WHITE'], self.center, end_h, 6)
+
+        # Минутная стрелка (белая)
+        angle_m = self._time_to_angle(self.current_hour, self.current_min, False)
+        rad_m = math.radians(90 - angle_m)
+        end_m = (self.center[0] + 110 * math.cos(rad_m), self.center[1] - 110 * math.sin(rad_m))
+        pygame.draw.line(surface, COLORS['WHITE'], self.center, end_m, 4)
+
         self.check_btn.draw(surface)
-        title = self.assets.fonts['medium'].render("Поставь время 6 часов", True, COLORS['GOLD'])
+        title = self.assets.fonts['medium'].render(f"Поставь стрелки на {self.target_time[0]}:{self.target_time[1]:02d}", True, COLORS['WHITE'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         super().draw(surface)
 
