@@ -781,61 +781,101 @@ class NumberCompositionMinigame(BaseMinigame):
 class MemoryLettersMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.cards = [('А', False), ('А', False), ('Б', False), ('В', False)]
+        self.cards = [
+            {'letter': 'А', 'flipped': False, 'matched': False},
+            {'letter': 'А', 'flipped': False, 'matched': False},
+            {'letter': 'Б', 'flipped': False, 'matched': False},
+            {'letter': 'В', 'flipped': False, 'matched': False}
+        ]
         random.shuffle(self.cards)
-        self.selected = None
+        self.selected_index = None
         self.waiting = False
         self.wait_timer = 0
-        self.buttons = []
+        self.pending_flip_back = []
+        # Карточки без Button – просто прямоугольники
+        self.card_rects = []
+        card_width = 150
+        card_height = 150
+        spacing = 30
+        start_x = (SCREEN_WIDTH - (card_width * 2 + spacing)) // 2
+        start_y = (SCREEN_HEIGHT - (card_height * 2 + spacing)) // 2
         for i in range(4):
-            rect = pygame.Rect(200 + (i%2)*300, 300 + (i//2)*200, 150, 150)
-            btn = Button(rect, "", assets.fonts['large'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
-                         callback=lambda i=i: self.reveal(i))
-            self.buttons.append(btn)
-        self.ui_elements = self.buttons
+            col = i % 2
+            row = i // 2
+            x = start_x + col * (card_width + spacing)
+            y = start_y + row * (card_height + spacing)
+            self.card_rects.append(pygame.Rect(x, y, card_width, card_height))
 
-    def reveal(self, idx):
-        if self.waiting or self.cards[idx][1]:
+    def handle_event(self, event):
+        if self.waiting:
             return
-        self.cards[idx] = (self.cards[idx][0], True)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            pos = event.pos
+            for idx, rect in enumerate(self.card_rects):
+                if rect.collidepoint(pos):
+                    self.reveal_card(idx)
+                    break
+        super().handle_event(event)  # если есть другие кнопки (например, "Назад")
+
+    def reveal_card(self, idx):
+        card = self.cards[idx]
+        if card['flipped'] or card['matched']:
+            return
+        # Открываем
+        card['flipped'] = True
         self.assets.play_sound('click')
-        if self.selected is None:
-            self.selected = idx
+        if self.selected_index is None:
+            self.selected_index = idx
         else:
-            if self.cards[self.selected][0] == self.cards[idx][0]:
-                self.cards[self.selected] = (self.cards[self.selected][0], True)
-                self.cards[idx] = (self.cards[idx][0], True)
-                self.selected = None
-                if all(flipped for _, flipped in self.cards):
-                    self.assets.play_sound('success')
+            first = self.cards[self.selected_index]
+            second = card
+            if first['letter'] == second['letter']:
+                first['matched'] = True
+                second['matched'] = True
+                first['flipped'] = True
+                second['flipped'] = True
+                self.selected_index = None
+                self.assets.play_sound('success')
+                if all(c['matched'] or c['letter'] != 'А' for c in self.cards):
                     self.complete(True)
             else:
                 self.waiting = True
-                self.wait_timer = 1.0
-                self.pending_idx = idx
+                self.wait_timer = 1000
+                self.pending_flip_back = [self.selected_index, idx]
+                self.selected_index = None
 
     def update(self, dt):
-        super().update(dt)
         if self.waiting:
             self.wait_timer -= dt
             if self.wait_timer <= 0:
-                self.cards[self.selected] = (self.cards[self.selected][0], False)
-                self.cards[self.pending_idx] = (self.cards[self.pending_idx][0], False)
-                self.selected = None
+                for idx in self.pending_flip_back:
+                    if not self.cards[idx]['matched']:
+                        self.cards[idx]['flipped'] = False
+                self.pending_flip_back = []
                 self.waiting = False
+        super().update(dt)
 
     def draw(self, surface):
-        title = self.assets.fonts['medium'].render("Найди пару одинаковых букв", True, COLORS['GOLD'])
-        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        for i, btn in enumerate(self.buttons):
-            if self.cards[i][1]:
-                letter = self.cards[i][0]
-                text_surf = self.assets.fonts['large'].render(letter, True, COLORS['BLACK'])
-                btn.color = COLORS['WHITE']
-                btn.draw(surface)
-                surface.blit(text_surf, text_surf.get_rect(center=btn.rect.center))
+        # Рисуем карточки
+        for i, rect in enumerate(self.card_rects):
+            card = self.cards[i]
+            # Рисуем фон карточки
+            if card['flipped'] or card['matched']:
+                color = COLORS['WHITE']
+                pygame.draw.rect(surface, color, rect, border_radius=10)
+                pygame.draw.rect(surface, COLORS['BLACK'], rect, 2, border_radius=10)
+                # Рисуем букву
+                letter_surf = self.assets.fonts['large'].render(card['letter'], True, COLORS['BLACK'])
+                surface.blit(letter_surf, letter_surf.get_rect(center=rect.center))
             else:
-                btn.draw(surface)
+                color = COLORS['LIGHT_BLUE']
+                pygame.draw.rect(surface, color, rect, border_radius=10)
+                pygame.draw.rect(surface, COLORS['BLACK'], rect, 2, border_radius=10)
+                # Можно нарисовать вопросительный знак
+                q_surf = self.assets.fonts['large'].render("?", True, COLORS['DARK_GRAY'])
+                surface.blit(q_surf, q_surf.get_rect(center=rect.center))
+        title = self.assets.fonts['medium'].render("Найди пару одинаковых букв (А и А)", True, COLORS['GOLD'])
+        surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
         super().draw(surface)
 
 
