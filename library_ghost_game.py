@@ -1151,7 +1151,7 @@ class LoadingScreen(Screen):
     def update(self, dt):
         self.timer -= dt
         if self.timer <= 0:
-            if len(self.game.completed_locations) > 0 or len(self.game.collected_letters) > 0:
+            if self.game.completed_locations or self.game.collected_letters or self.game.location_tasks_completed:
                 self.game.set_state('MAP')
             else:
                 self.game.set_state('PROLOG')
@@ -1331,15 +1331,27 @@ class LocationScreen(Screen):
 
     def update_task_buttons(self):
         self.task_buttons = []
+        y = 200
         for t in self.tasks:
             completed = t['id'] in self.completed_tasks
-            color = COLORS['GREEN'] if completed else COLORS['LIGHT_BLUE']
-            btn = Button(pygame.Rect(200, 200 + len(self.task_buttons)*70, 600, 50),
-                         f"Задание: {t['name']}",
-                         self.game.assets.fonts['small'], color, COLORS['LIGHT_GREEN'] if not completed else color,
-                         callback=lambda task=t: self.start_task(task) if not completed else None)
+            rect = pygame.Rect(200, y, 600, 50)
+            
+            # Создаём замыкание с фиксацией текущих значений
+            def make_callback(task, is_completed):
+                def callback():
+                    if not is_completed:
+                        self.start_task(task)
+                return callback
+            
+            btn = Button(rect,
+                        f"Задание: {t['name']}",
+                        self.game.assets.fonts['small'],
+                        COLORS['GREEN'] if completed else COLORS['LIGHT_BLUE'],
+                        COLORS['LIGHT_GREEN'] if not completed else COLORS['GREEN'],
+                        callback=make_callback(t, completed))
             btn.enabled = not completed
             self.task_buttons.append(btn)
+            y += 70
 
     def start_task(self, task):
         self.game.set_state('TASK', task=task, location_num=self.game.current_location_num)
@@ -1353,8 +1365,10 @@ class LocationScreen(Screen):
                 self.game.assets.play_sound('letter_collect')
             self.game.completed_locations.append(self.game.current_location_num)
             self.game.save_progress()
-            print(f"DEBUG: Локация {self.game.current_location_num} завершена. Пройденные локации: {self.game.completed_locations}")
+        else:
+            self.game.save_progress()
         self.game.set_state('MAP')
+
 
     def handle_event(self, event):
         for btn in self.task_buttons:
@@ -1502,7 +1516,8 @@ class LibraryGame:
                 data = json.load(f)
                 self.completed_locations = data.get('completed_locations', [])
                 self.collected_letters = data.get('collected_letters', '')
-                self.location_tasks_completed = data.get('location_tasks_completed', {})
+                loc_tasks = data.get('location_tasks_completed', {})
+                self.location_tasks_completed = {int(k): v for k, v in loc_tasks.items()}
                 self.stars = data.get('stars', 0)
         except:
             self.completed_locations = []
