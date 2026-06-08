@@ -978,7 +978,10 @@ class GameManager:
         self.child_id = user_info['id']
 
         progress = self.db.get_child_progress(self.child_id)
-        self.quest_id = progress.quest_id if progress else 1
+        if progress:
+            self.quest_id = progress['quest_id']
+        else:
+            self.quest_id = 1
 
         self.current_location_id = 1
         self.total_score = 0
@@ -1144,12 +1147,16 @@ class GameManager:
             events = pygame.event.get()
             for event in events:
                 if event.type == pygame.QUIT:
+                    tasks_done = self.tasks_completed.get(self.current_location_id, [])
+                    self.db.save_scooby_progress(
+                        child_id=self.child_id,
+                        location=self.current_location_id,
+                        tasks_completed=tasks_done,
+                        collected_toys=self.collected_toys,
+                        found_clues=self.found_clues,
+                        score=self.total_score
+                    )
                     self.quit_game()
-                # ========== ОТЛАДКА ==========
-                # if self.DEBUG_PRINT_CLICKS and event.type == pygame.MOUSEBUTTONDOWN:
-                #     pos = event.pos
-                #     print(f"[DEBUG] Click at ({pos[0]}, {pos[1]})  | Location: {self.current_location_id}")
-                # ========== ОТЛАДКА ==========
 
             if self.state == "MENU":
                 self._handle_menu(events)

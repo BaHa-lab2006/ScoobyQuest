@@ -6,6 +6,7 @@ import hashlib
 import os
 from datetime import datetime
 import logging
+import json
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +26,6 @@ RU_TO_EN = {
     'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
 }
 
-
 def transliterate_ru(text):
     """Простая транслитерация русского текста в латиницу"""
     result = ""
@@ -43,6 +43,87 @@ def transliterate_ru(text):
     return result.lower()
 
 
+def encode_progress(progress_dict: dict) -> str:
+    """
+    Кодирует прогресс ребёнка в строку для поля completed_minigames.
+    Формат: "SCOOBY:loc=2|tasks=1,2,3|toys=duck,bunny|clues=button,newspaper"
+    Для Ghost: "GHOST:loc=3|task=1|stars=2|clues=1,4"
+    Для Library: "LIB:locs=1,2,3|letters=ВОРОНА|tasks={1:['sort','logic']}"
+    """
+    game = progress_dict.get('game', 'SCOOBY')
+    parts = [game]
+    if game == 'SCOOBY':
+        parts.append(f"loc={progress_dict.get('location', 1)}")
+        if 'tasks' in progress_dict:
+            tasks_str = ','.join(str(t) for t in progress_dict['tasks'])
+            parts.append(f"tasks={tasks_str}")
+        if 'toys' in progress_dict:
+            toys_str = ','.join(progress_dict['toys'])
+            parts.append(f"toys={toys_str}")
+        if 'clues' in progress_dict:
+            clues_str = ','.join(progress_dict['clues'])
+            parts.append(f"clues={clues_str}")
+    elif game == 'GHOST':
+        parts.append(f"loc={progress_dict.get('location', 1)}")
+        parts.append(f"task={progress_dict.get('task', 1)}")
+        parts.append(f"stars={progress_dict.get('stars', 0)}")
+        if 'clues' in progress_dict:
+            clues_str = ','.join(str(c) for c in progress_dict['clues'])
+            parts.append(f"clues={clues_str}")
+    elif game == 'LIBRARY':
+        parts.append(f"locs={','.join(str(l) for l in progress_dict.get('completed_locations', []))}")
+        parts.append(f"letters={progress_dict.get('collected_letters', '')}")
+        # tasks: словарь {loc_id: [task_ids]}
+        tasks_dict = progress_dict.get('location_tasks', {})
+        tasks_str = json.dumps(tasks_dict, separators=(',', ':'))
+        parts.append(f"tasks={tasks_str}")
+        parts.append(f"stars={progress_dict.get('stars', 0)}")
+    return '|'.join(parts)
+
+def decode_progress(progress_str: str) -> dict:
+    """
+    Декодирует строку из completed_minigames в словарь.
+    """
+    if not progress_str:
+        return {}
+    parts = progress_str.split('|')
+    game = parts[0]
+    result = {'game': game}
+    for part in parts[1:]:
+        if '=' not in part:
+            continue
+        # Разделяем только по первому '=', так как в значении могут быть '='
+        eq_index = part.index('=')
+        key = part[:eq_index]
+        value = part[eq_index+1:]
+        
+        if key == 'loc':
+            result['location'] = int(value)
+        elif key == 'task':
+            result['task'] = int(value)
+        elif key == 'tasks':
+            if game == 'LIBRARY':
+                # Для библиотеки значение - JSON словарь
+                result['location_tasks'] = json.loads(value)
+            else:
+                result['tasks'] = [int(x) for x in value.split(',') if x]
+        elif key == 'toys':
+            result['toys'] = value.split(',') if value else []
+        elif key == 'clues':
+            if game == 'GHOST':
+                result['clues'] = [int(x) for x in value.split(',') if x]
+            else:
+                result['clues'] = value.split(',') if value else []
+        elif key == 'stars':
+            result['stars'] = int(value)
+        elif key == 'locs':
+            result['completed_locations'] = [int(x) for x in value.split(',') if x]
+        elif key == 'letters':
+            result['collected_letters'] = value
+        elif key == 'score':
+            result['score'] = int(value)  # или float, если нужно
+    return result
+
 class DatabaseConnection:
     """Класс для управления подключением к БД"""
     
@@ -58,9 +139,9 @@ class DatabaseConnection:
         """Установка подключения к SQL Server"""
         try:
             if server is None:
-                server = os.getenv('SQL_SERVER', 'IMOZEPC\\MSSQLSERVER04')
+                server = os.getenv('SQL_SERVER', 'localhost')
             if database is None:
-                database = os.getenv('SQL_DATABASE', 'ScoobyQuestDB')
+                database = os.getenv('SQL_DATABASE', 'ScoobyQuestDB_V2')
             if username is None:
                 username = os.getenv('SQL_USERNAME', 'Shagy')
             if password is None:
@@ -479,7 +560,8 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             query = """
-            SELECT cp.*, q.quest_name, g.group_name
+            SELECT cp.current_stage, cp.completed_minigames, cp.total_stages, cp.score, cp.status,
+                q.quest_name, g.group_name, cp.quest_id
             FROM ChildProgress cp
             JOIN Quests q ON cp.quest_id = q.id
             JOIN Users u ON cp.child_id = u.id
@@ -487,33 +569,63 @@ class DatabaseManager:
             WHERE cp.child_id = ? AND cp.status = 'active'
             """
             cursor.execute(query, (child_id,))
-            return cursor.fetchone()
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'current_stage': row[0],
+                    'completed_minigames': row[1],
+                    'decoded_progress': decode_progress(row[1]) if row[1] else {},
+                    'total_stages': row[2],
+                    'score': row[3],
+                    'status': row[4],
+                    'quest_name': row[5],
+                    'group_name': row[6],
+                    'quest_id': row[7]
+                }
+            return None
         except pyodbc.Error as e:
             logger.error(f"Ошибка при получении прогресса: {e}")
             return None
     
-    def update_child_progress(self, child_id, stage=None, score=None):
+    def update_child_stage(self, child_id, stage):
+        """Обновить текущий этап ребёнка"""
         try:
             cursor = self.conn.cursor()
-            if stage is not None:
-                query = """
-                UPDATE ChildProgress 
-                SET current_stage = ?, last_activity = GETDATE()
-                WHERE child_id = ? AND status = 'active'
-                """
-                cursor.execute(query, (stage, child_id))
-            if score is not None:
-                query = """
-                UPDATE ChildProgress 
-                SET score = score + ?, completed_stages = completed_stages + 1,
-                    last_activity = GETDATE()
-                WHERE child_id = ? AND status = 'active'
-                """
-                cursor.execute(query, (score, child_id))
+            query = """
+            UPDATE ChildProgress 
+            SET current_stage = ?, last_activity = GETDATE()
+            WHERE child_id = ? AND status = 'active'
+            """
+            cursor.execute(query, (stage, child_id))
             self.conn.commit()
             return True
         except pyodbc.Error as e:
-            logger.error(f"Ошибка при обновлении прогресса: {e}")
+            logger.error(f"Ошибка обновления этапа: {e}")
+            return False
+
+    def save_child_progress(self, child_id, progress_dict):
+        progress_str = encode_progress(progress_dict)
+        try:
+            cursor = self.conn.cursor()
+            score = progress_dict.get('score', None)
+            if score is not None:
+                query = """
+                UPDATE ChildProgress 
+                SET completed_minigames = ?, score = ?, last_activity = GETDATE()
+                WHERE child_id = ? AND status = 'active'
+                """
+                cursor.execute(query, (progress_str, score, child_id))
+            else:
+                query = """
+                UPDATE ChildProgress 
+                SET completed_minigames = ?, last_activity = GETDATE()
+                WHERE child_id = ? AND status = 'active'
+                """
+                cursor.execute(query, (progress_str, child_id))
+            self.conn.commit()
+            return True
+        except pyodbc.Error as e:
+            logger.error(f"Ошибка сохранения прогресса: {e}")
             return False
     
     def get_all_quests(self):
@@ -697,6 +809,63 @@ class DatabaseManager:
         except pyodbc.Error as e:
             logger.error(f"Ошибка получения quest_id для группы {group_name}: {e}")
             return None
+        
+    # ---------- Scooby Game ----------
+    def save_scooby_progress(self, child_id, location, tasks_completed, collected_toys, found_clues, score=None):
+        progress = {
+            'game': 'SCOOBY',
+            'location': location,
+            'tasks': tasks_completed,
+            'toys': collected_toys,
+            'clues': found_clues
+        }
+        if score is not None:
+            progress['score'] = score
+        return self.save_child_progress(child_id, progress)
+
+    def load_scooby_progress(self, child_id):
+        prog = self.get_child_progress(child_id)
+        if prog and prog['decoded_progress'].get('game') == 'SCOOBY':
+            return prog['decoded_progress']
+        return {'game': 'SCOOBY', 'location': 1, 'tasks': [], 'toys': [], 'clues': []}
+
+    # ---------- Ghost Game ----------
+    def save_ghost_progress(self, child_id, location, task, stars, clues, score=None):
+        progress = {
+            'game': 'GHOST',
+            'location': location,
+            'task': task,
+            'stars': stars,
+            'clues': clues
+        }
+        if score is not None:
+            progress['score'] = score
+        return self.save_child_progress(child_id, progress)
+
+    def load_ghost_progress(self, child_id):
+        prog = self.get_child_progress(child_id)
+        if prog and prog['decoded_progress'].get('game') == 'GHOST':
+            return prog['decoded_progress']
+        return {'game': 'GHOST', 'location': 1, 'task': 1, 'stars': 0, 'clues': []}
+
+    # ---------- Library Game ----------
+    def save_library_progress(self, child_id, completed_locations, collected_letters, location_tasks, stars, score=None):
+        progress = {
+            'game': 'LIBRARY',
+            'completed_locations': completed_locations,
+            'collected_letters': collected_letters,
+            'location_tasks': location_tasks,
+            'stars': stars
+        }
+        if score is not None:
+            progress['score'] = score
+        return self.save_child_progress(child_id, progress)
+
+    def load_library_progress(self, child_id):
+        prog = self.get_child_progress(child_id)
+        if prog and prog['decoded_progress'].get('game') == 'LIBRARY':
+            return prog['decoded_progress']
+        return {'game': 'LIBRARY', 'completed_locations': [], 'collected_letters': '', 'location_tasks': {}, 'stars': 0}
 
 # Глобальный экземпляр
 db_manager = DatabaseManager()

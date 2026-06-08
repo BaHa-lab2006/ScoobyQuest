@@ -50,6 +50,7 @@ class LibraryGhostGameWrapper(BaseGameWrapper):
             dt = clock.tick(FPS)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    self.save_progress()
                     self.game.running = False
                 self.game.handle_event(event)
             self.game.update(dt)

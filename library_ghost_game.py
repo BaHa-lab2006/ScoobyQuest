@@ -5,11 +5,11 @@
 """
 
 import pygame
-import json
 import os
 import random
 import math
 from typing import Dict, List, Optional, Any, Tuple, Callable
+from database import db_manager
 
 # ---------- КОНФИГУРАЦИЯ ----------
 SCREEN_WIDTH = 1200
@@ -49,8 +49,6 @@ UI_PATH = os.path.join(IMAGES_PATH, "ui")
 MUSIC_PATH = os.path.join(SOUNDS_PATH, "music")
 SFX_PATH = os.path.join(SOUNDS_PATH, "sfx")
 VOICE_PATH = os.path.join(SOUNDS_PATH, "voice")
-
-PROGRESS_FILE = "library_progress.json"
 
 def render_with_outline(text, font, color, outline_color, outline_width=2):
     """Рисует текст с обводкой (тенью)"""
@@ -1870,8 +1868,12 @@ class LibraryGame:
         self.assets = AssetCache()
         self.assets.play_music('bg_music', loop=-1)
 
-        # Прогресс
-        self.load_progress()
+        # Загружаем прогресс из БД
+        progress = db_manager.load_library_progress(self.child_id)
+        self.completed_locations = progress.get('completed_locations', [])
+        self.collected_letters = progress.get('collected_letters', '')
+        self.location_tasks_completed = progress.get('location_tasks', {})
+        self.stars = progress.get('stars', 0)
         self.state_name = 'LOADING'
         self.current_screen = None
         self.running = True
@@ -1896,21 +1898,6 @@ class LibraryGame:
         }
         return locations.get(loc_num)
 
-    def load_progress(self):
-        try:
-            with open(PROGRESS_FILE, 'r') as f:
-                data = json.load(f)
-                self.completed_locations = data.get('completed_locations', [])
-                self.collected_letters = data.get('collected_letters', '')
-                loc_tasks = data.get('location_tasks_completed', {})
-                self.location_tasks_completed = {int(k): v for k, v in loc_tasks.items()}
-                self.stars = data.get('stars', 0)
-        except:
-            self.completed_locations = []
-            self.collected_letters = ''
-            self.location_tasks_completed = {}
-            self.stars = 0
-
     def save_progress(self):
         data = {
             'completed_locations': self.completed_locations,
@@ -1918,8 +1905,13 @@ class LibraryGame:
             'location_tasks_completed': self.location_tasks_completed,
             'stars': self.stars,
         }
-        with open(PROGRESS_FILE, 'w') as f:
-            json.dump(data, f)
+        db_manager.save_library_progress(
+            child_id=self.child_id,
+            completed_locations=self.completed_locations,
+            collected_letters=self.collected_letters,
+            location_tasks=self.location_tasks_completed,
+            stars=self.stars
+        )
 
     def set_state(self, state: str, **kwargs):
         self.state_name = state

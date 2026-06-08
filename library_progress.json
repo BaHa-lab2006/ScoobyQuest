@@ -1,1 +1,1 @@
-{"completed_locations": [1, 2, 3, 4, 5, 6], "collected_letters": "\u0412\u041e\u0420\u041e\u041d\u0410", "location_tasks_completed": {"1": ["sort", "logic"], "2": ["memory", "number"], "3": ["clock", "maze"], "4": ["puzzle", "cause"], "5": ["even", "rebus"], "6": ["final"]}, "stars": 1}
+{"completed_locations": [1], "collected_letters": "\u0412", "location_tasks_completed": {"1": ["sort", "logic"]}, "stars": 0}
