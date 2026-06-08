@@ -131,6 +131,7 @@ class AssetCache:
         self._load_image('puddle', os.path.join(ITEMS_PATH, 'cause_effect', 'puddle.jpg'), (100, 100))
         self._load_image('open_window', os.path.join(ITEMS_PATH, 'cause_effect', 'open_window.png'), (150, 150))
         self._load_image('rain', os.path.join(ITEMS_PATH, 'cause_effect', 'rain.png'), (200, 150))
+        self._load_image('closed_book', os.path.join(ITEMS_PATH, 'cause_effect', 'closed_book.png'), (200, 150))
         self._load_image('clock_face', os.path.join(ITEMS_PATH, 'clock', 'clock_face.png'), (300, 300))
         self._load_image('clock_hour_hand', os.path.join(ITEMS_PATH, 'clock', 'clock_hour_hand.png'), (120, 120))
         self._load_image('clock_min_hand', os.path.join(ITEMS_PATH, 'clock', 'clock_min_hand.png'), (150, 150))
@@ -141,11 +142,34 @@ class AssetCache:
         self._load_image('paw_print', os.path.join(ITEMS_PATH, 'puzzle', 'paw_print_puzzle.jpg'), (400, 400))
         self._load_image('bookshelf_maze', os.path.join(ITEMS_PATH, 'maze', 'bookshelf.png'), (70, 70))
         self._load_image('exit_door', os.path.join(ITEMS_PATH, 'maze', 'exit_door.png'), (70, 70))
+        self._load_image('wall_horizontal', os.path.join(ITEMS_PATH, 'maze', 'wall_horizontal.jpg'), (80, 20))
+        self._load_image('wall_vertical', os.path.join(ITEMS_PATH, 'maze', 'wall_vertical.png'), (20, 80))
         self._load_image('cap', os.path.join(ITEMS_PATH, 'rebus', 'cap-bg.png'), (100, 100))
         self._load_image('fish', os.path.join(ITEMS_PATH, 'rebus', 'fish.png'), (100, 100))
-        self._load_image('swan', os.path.join(ITEMS_PATH, 'rebus', 'swan.png'), (100, 100))
-        self._load_image('rooster', os.path.join(ITEMS_PATH, 'rebus', 'rooster.png'), (100, 100))
+        self._load_image('window', os.path.join(ITEMS_PATH, 'rebus', 'window.png'), (100, 100))
+        self._load_image('nose', os.path.join(ITEMS_PATH, 'rebus', 'nose.png'), (100, 100))
         self._load_image('watermelon', os.path.join(ITEMS_PATH, 'rebus', 'watermelon.png'), (100, 100))
+        self._load_image('number_1', os.path.join(ITEMS_PATH, 'numbers', 'number_1.png'), (100, 100))
+        self._load_image('number_2', os.path.join(ITEMS_PATH, 'numbers', 'number_2.png'), (100, 100))
+        self._load_image('number_3', os.path.join(ITEMS_PATH, 'numbers', 'number_3.png'), (100, 100))
+        self._load_image('number_4', os.path.join(ITEMS_PATH, 'numbers', 'number_4.png'), (100, 100))
+        self._load_image('number_5', os.path.join(ITEMS_PATH, 'numbers', 'number_5.png'), (100, 100))
+        self._load_image('number_6', os.path.join(ITEMS_PATH, 'numbers', 'number_6.png'), (100, 100))
+        self._load_image('number_7', os.path.join(ITEMS_PATH, 'numbers', 'number_7.png'), (100, 100))
+        self._load_image('number_8', os.path.join(ITEMS_PATH, 'numbers', 'number_8.png'), (100, 100))
+        self._load_image('number_9', os.path.join(ITEMS_PATH, 'numbers', 'number_9.png'), (100, 100))
+        self._load_image('number_10', os.path.join(ITEMS_PATH, 'numbers', 'number_10.png'), (100, 100))
+        self._load_image('number_11', os.path.join(ITEMS_PATH, 'numbers', 'number_11.png'), (100, 100))
+        self._load_image('number_12', os.path.join(ITEMS_PATH, 'numbers', 'number_12.png'), (100, 100))
+        self._load_image('number_13', os.path.join(ITEMS_PATH, 'numbers', 'number_13.png'), (100, 100))
+        self._load_image('number_14', os.path.join(ITEMS_PATH, 'numbers', 'number_14.png'), (100, 100))
+        self._load_image('number_15', os.path.join(ITEMS_PATH, 'numbers', 'number_15.png'), (100, 100))
+        self._load_image('number_16', os.path.join(ITEMS_PATH, 'numbers', 'number_16.png'), (100, 100))
+        self._load_image('number_17', os.path.join(ITEMS_PATH, 'numbers', 'number_17.png'), (100, 100))
+        self._load_image('number_18', os.path.join(ITEMS_PATH, 'numbers', 'number_18.png'), (100, 100))
+        self._load_image('number_19', os.path.join(ITEMS_PATH, 'numbers', 'number_19.png'), (100, 100))
+        self._load_image('number_20', os.path.join(ITEMS_PATH, 'numbers', 'number_20.png'), (100, 100))
+        self._load_image('star', os.path.join(ITEMS_PATH, 'star.png'), (200, 200))
         # UI
         self._load_image('door', os.path.join(UI_PATH, 'door.png'), (80, 120))
         self._load_image('home_button', os.path.join(UI_PATH, 'home.png'), (50, 50))
@@ -993,9 +1017,9 @@ class ClockMinigame(BaseMinigame):
 class MazeMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.pos = (0,0)
-        self.target = (3,3)
-        # Стены: для каждой клетки направления
+        self.pos = (0, 0)
+        self.target = (3, 3)
+        # Стены (оставляем логику)
         self.walls = {
             (0,0): {'right': False, 'down': True},
             (1,0): {'left': False, 'right': False, 'down': True},
@@ -1014,71 +1038,136 @@ class MazeMinigame(BaseMinigame):
             (2,3): {'left': False, 'right': False, 'up': False},
             (3,3): {'left': False, 'up': True},
         }
-        self.buttons = []
-        btn_up = Button(pygame.Rect(SCREEN_WIDTH//2-30, 550, 60, 50), "↑", assets.fonts['large'],
-                        COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,-1))
-        btn_down = Button(pygame.Rect(SCREEN_WIDTH//2-30, 650, 60, 50), "↓", assets.fonts['large'],
-                          COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(0,1))
-        btn_left = Button(pygame.Rect(SCREEN_WIDTH//2-90, 600, 60, 50), "←", assets.fonts['large'],
-                          COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(-1,0))
-        btn_right = Button(pygame.Rect(SCREEN_WIDTH//2+30, 600, 60, 50), "→", assets.fonts['large'],
-                           COLORS['LIGHT_BLUE'], COLORS['GREEN'], callback=lambda: self.move(1,0))
-        self.buttons = [btn_up, btn_down, btn_left, btn_right]
-        self.ui_elements = self.buttons
+        # Загружаем спрайты стеллажа и выхода
+        self.bookshelf_img = assets.get_image('bookshelf_maze')
+        self.exit_img = assets.get_image('exit_door')
+        if self.bookshelf_img is None:
+            self.bookshelf_img = pygame.Surface((70, 70))
+            self.bookshelf_img.fill(COLORS['GREEN'])
+        if self.exit_img is None:
+            self.exit_img = pygame.Surface((70, 70))
+            self.exit_img.fill(COLORS['GOLD'])
+        self.bookshelf_img = pygame.transform.scale(self.bookshelf_img, (70, 70))
+        self.exit_img = pygame.transform.scale(self.exit_img, (70, 70))
 
-    def move(self, dx, dy):
-        nx, ny = self.pos[0]+dx, self.pos[1]+dy
-        if nx < 0 or nx >= 4 or ny < 0 or ny >= 4:
-            self.show_message("Там стена!")
+        # Загружаем спрайты стен
+        self.wall_h_img = assets.get_image('wall_horizontal')
+        self.wall_v_img = assets.get_image('wall_vertical')
+        if self.wall_h_img is None:
+            self.wall_h_img = pygame.Surface((80, 20))
+            self.wall_h_img.fill(COLORS['RED'])
+        else:
+            self.wall_h_img = pygame.transform.scale(self.wall_h_img, (80, 20))
+        if self.wall_v_img is None:
+            self.wall_v_img = pygame.Surface((20, 80))
+            self.wall_v_img.fill(COLORS['RED'])
+        else:
+            self.wall_v_img = pygame.transform.scale(self.wall_v_img, (20, 80))
+
+        # Убираем кнопки-стрелки, оставляем только перетаскивание (по желанию можно вернуть)
+        self.dragging = False
+        self.drag_offset = (0, 0)
+
+        self.check_btn = Button(pygame.Rect(SCREEN_WIDTH//2-60, 650, 120, 50), "Проверить",
+                                assets.fonts['small'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
+                                callback=self.check)
+        self.ui_elements = [self.check_btn]
+
+    def check(self):
+        if self.pos == self.target:
+            self.assets.play_sound('success')
+            self.complete(True)
+        else:
             self.assets.play_sound('fail')
+            self.show_message("Стеллаж ещё не у выхода!", COLORS['RED'])
+
+    def handle_event(self, event):
+        super().handle_event(event)
+        # Перетаскивание стеллажа
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            cell_size = 80
+            offset_x = (SCREEN_WIDTH - 4*cell_size) // 2
+            offset_y = 150
+            rect = pygame.Rect(offset_x + self.pos[0]*cell_size, offset_y + self.pos[1]*cell_size, cell_size, cell_size)
+            if rect.collidepoint(event.pos):
+                self.dragging = True
+                self.drag_offset = (rect.x - event.pos[0], rect.y - event.pos[1])
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            # Перемещаем стеллаж (визуально), но реальное положение меняем только при отпускании
+            pass
+        elif event.type == pygame.MOUSEBUTTONUP and self.dragging:
+            self.dragging = False
+            # Определяем, в какой клетке отпустили
+            cell_size = 80
+            offset_x = (SCREEN_WIDTH - 4*cell_size) // 2
+            offset_y = 150
+            mx, my = event.pos
+            # Вычисляем координаты клетки
+            grid_x = (mx - offset_x) // cell_size
+            grid_y = (my - offset_y) // cell_size
+            if 0 <= grid_x < 4 and 0 <= grid_y < 4:
+                self.move_to(grid_x, grid_y)
+            # else: остаётся на месте
+
+    def move_to(self, nx, ny):
+        # Проверка пути (по стенам) от текущей позиции до (nx, ny) - упростим: разрешаем только соседние клетки
+        dx = nx - self.pos[0]
+        dy = ny - self.pos[1]
+        if abs(dx) + abs(dy) != 1:
             return
-        # Проверка стены
         if dx == 1 and self.walls[self.pos].get('right', False):
-            self.show_message("Там стена!")
+            self.show_message("Там стена!", COLORS['RED'])
             self.assets.play_sound('fail')
             return
         if dx == -1 and self.walls[(nx, ny)].get('right', False):
-            self.show_message("Там стена!")
+            self.show_message("Там стена!", COLORS['RED'])
             self.assets.play_sound('fail')
             return
         if dy == 1 and self.walls[self.pos].get('down', False):
-            self.show_message("Там стена!")
+            self.show_message("Там стена!", COLORS['RED'])
             self.assets.play_sound('fail')
             return
         if dy == -1 and self.walls[(nx, ny)].get('down', False):
-            self.show_message("Там стена!")
+            self.show_message("Там стена!", COLORS['RED'])
             self.assets.play_sound('fail')
             return
         self.pos = (nx, ny)
         self.assets.play_sound('bookshelf_move')
-        if self.pos == self.target:
-            self.assets.play_sound('success')
-            self.complete(True)
 
     def draw(self, surface):
         cell_size = 80
-        offset_x = (SCREEN_WIDTH - 4*cell_size)//2
+        offset_x = (SCREEN_WIDTH - 4*cell_size) // 2
         offset_y = 150
+
         for y in range(4):
             for x in range(4):
-                rect = pygame.Rect(offset_x + x*cell_size, offset_y + y*cell_size, cell_size-2, cell_size-2)
-                if (x,y) == self.pos:
-                    color = COLORS['GREEN']
-                elif (x,y) == self.target:
-                    color = COLORS['GOLD']
-                else:
-                    color = COLORS['LIGHT_BLUE']
-                pygame.draw.rect(surface, color, rect)
-                pygame.draw.rect(surface, COLORS['BLACK'], rect, 2)
-                # Стены
+                rect = pygame.Rect(offset_x + x*cell_size, offset_y + y*cell_size, cell_size, cell_size)
+                # Рамка клетки
+                pygame.draw.rect(surface, COLORS['WHITE'], rect, 2)
+                # Стены (спрайты)
                 if self.walls[(x,y)].get('right', False):
-                    pygame.draw.line(surface, COLORS['RED'], (rect.right, rect.top), (rect.right, rect.bottom), 3)
+                    # Вертикальная стена
+                    wall_rect = pygame.Rect(rect.right - 10, rect.top, 20, cell_size)
+                    surface.blit(self.wall_v_img, wall_rect)
                 if self.walls[(x,y)].get('down', False):
-                    pygame.draw.line(surface, COLORS['RED'], (rect.left, rect.bottom), (rect.right, rect.bottom), 3)
-        title = self.assets.fonts['medium'].render("Проведи стеллаж к выходу (золотая клетка)", True, COLORS['GOLD'])
+                    # Горизонтальная стена
+                    wall_rect = pygame.Rect(rect.left, rect.bottom - 10, cell_size, 20)
+                    surface.blit(self.wall_h_img, wall_rect)
+
+        # Стеллаж (можно перетаскивать)
+        rect = pygame.Rect(offset_x + self.pos[0]*cell_size, offset_y + self.pos[1]*cell_size, cell_size, cell_size)
+        img_rect = self.bookshelf_img.get_rect(center=rect.center)
+        surface.blit(self.bookshelf_img, img_rect)
+
+        # Выход
+        target_rect = pygame.Rect(offset_x + self.target[0]*cell_size, offset_y + self.target[1]*cell_size, cell_size, cell_size)
+        exit_rect = self.exit_img.get_rect(center=target_rect.center)
+        surface.blit(self.exit_img, exit_rect)
+
+        self.check_btn.draw(surface)
+
+        title = self.assets.fonts['medium'].render("Перетащи стеллаж к выходу (золотая дверь)", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        for btn in self.buttons:
-            btn.draw(surface)
         super().draw(surface)
 
 
@@ -1181,38 +1270,85 @@ class PuzzleMinigame(BaseMinigame):
 class CauseEffectMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.options = ["Лужа на полу", "Горящая лампа", "Закрытая книга"]
-        self.correct = 0
-        self.buttons = []
-        for i, opt in enumerate(self.options):
-            btn = Button(pygame.Rect(300, 400 + i*70, 400, 60), opt,
-                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
-                         callback=lambda i=i: self.check(i))
-            self.buttons.append(btn)
-        self.ui_elements = self.buttons
+        # Загружаем спрайты следствий
+        self.puddle_img = assets.get_image('puddle')
+        self.lamp_img = assets.get_image('lamp')
+        self.closed_book_img = assets.get_image('closed_book')
+        # Если нет – создаём заглушки
+        if self.puddle_img is None:
+            self.puddle_img = pygame.Surface((150, 150))
+            self.puddle_img.fill(COLORS['BLUE'])
+        if self.lamp_img is None:
+            self.lamp_img = pygame.Surface((150, 150))
+            self.lamp_img.fill(COLORS['YELLOW'])
+        if self.closed_book_img is None:
+            self.closed_book_img = pygame.Surface((150, 150))
+            self.closed_book_img.fill(COLORS['GREEN'])
+        # Масштабируем
+        size = (150, 150)
+        self.puddle_img = pygame.transform.scale(self.puddle_img, size)
+        self.lamp_img = pygame.transform.scale(self.lamp_img, size)
+        self.closed_book_img = pygame.transform.scale(self.closed_book_img, size)
 
-    def check(self, idx):
-        if idx == self.correct:
-            self.assets.play_sound('success')
-            self.complete(True)
+        # Картинка причины (окно + дождь)
+        self.cause_img = assets.get_image('open_window')
+        if self.cause_img is None:
+            self.cause_img = pygame.Surface((300, 200))
+            self.cause_img.fill(COLORS['LIGHT_BLUE'])
         else:
-            self.assets.play_sound('fail')
-            self.show_message("Если окно открыто и идёт дождь — что случится с полом?")
+            self.cause_img = pygame.transform.scale(self.cause_img, (300, 200))
+        self.rain_img = assets.get_image('rain')
+        if self.rain_img is None:
+            self.rain_img = pygame.Surface((300, 200), pygame.SRCALPHA)
+        else:
+            self.rain_img = pygame.transform.scale(self.rain_img, (300, 200))
+
+        # Позиции трёх вариантов
+        self.option_rects = []
+        start_x = SCREEN_WIDTH // 2 - 250
+        y = 450
+        self.option_rects.append(pygame.Rect(start_x, y, 150, 150))      # лужа
+        self.option_rects.append(pygame.Rect(start_x + 180, y, 150, 150)) # лампа
+        self.option_rects.append(pygame.Rect(start_x + 360, y, 150, 150)) # закрытая книга
+        self.correct_index = 0  # лужа
+
+    def handle_event(self, event):
+        super().handle_event(event)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, rect in enumerate(self.option_rects):
+                if rect.collidepoint(event.pos):
+                    if i == self.correct_index:
+                        self.assets.play_sound('success')
+                        self.complete(True)
+                    else:
+                        self.assets.play_sound('fail')
+                        self.show_message("Если окно открыто и идёт дождь — что случится с полом?")
 
     def draw(self, surface):
+        # Причина
+        cause_x = SCREEN_WIDTH // 2 - 150
+        surface.blit(self.cause_img, (cause_x, 150))
+        if self.rain_img:
+            surface.blit(self.rain_img, (cause_x, 150))
+        # Варианты следствий
+        surface.blit(self.puddle_img, self.option_rects[0])
+        surface.blit(self.lamp_img, self.option_rects[1])
+        surface.blit(self.closed_book_img, self.option_rects[2])
+        # Подписи
+        font = self.assets.fonts['small']
+        labels = ["Лужа", "Лампа", "Закрытая книга"]
+        for i, rect in enumerate(self.option_rects):
+            label = font.render(labels[i], True, COLORS['WHITE'])
+            surface.blit(label, label.get_rect(center=(rect.centerx, rect.bottom + 15)))
         title = self.assets.fonts['medium'].render("Выбери правильное следствие", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        # Изображение причины
-        cause_text = self.assets.fonts['small'].render("Открытое окно идёт дождь", True, COLORS['WHITE'])
-        surface.blit(cause_text, (SCREEN_WIDTH//2 - cause_text.get_width()//2, 150))
         super().draw(surface)
-
 
 # 5.1 Ребус
 class RebusMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.pictures = [("cap", "К"), ("fish", "Р"), ("swan", "О"), ("rooster", "Н"), ("watermelon", "А")]
+        self.pictures = [("cap", "К"), ("fish", "Р"), ("window", "О"), ("nose", "Н"), ("watermelon", "А")]
         self.user_letters = ["", "", "", "", ""]
         self.current_slot = 0
         self.keyboard_buttons = []
@@ -1271,35 +1407,65 @@ class RebusMinigame(BaseMinigame):
 class EvenNumbersMinigame(BaseMinigame):
     def __init__(self, assets, on_complete):
         super().__init__(assets, on_complete)
-        self.clicked = [False]*21
-        self.buttons = []
-        for i in range(1, 21):
-            x = 100 + ((i-1)%5)*120
-            y = 200 + ((i-1)//5)*80
-            btn = Button(pygame.Rect(x, y, 80, 60), str(i),
-                         assets.fonts['medium'], COLORS['LIGHT_BLUE'], COLORS['GREEN'],
-                         callback=lambda n=i: self.click_number(n))
-            self.buttons.append(btn)
-        self.ui_elements = self.buttons
+        self.clicked = [False] * 21  # индекс 1..20
+        self.number_sprites = {}
+        self.number_rects = []
 
-    def click_number(self, n):
-        if n % 2 == 0 and not self.clicked[n]:
-            self.clicked[n] = True
-            self.assets.play_sound('click')
-            if all(self.clicked[i] for i in range(2,21,2)):
-                self.assets.play_sound('success')
-                self.complete(True)
-        elif n % 2 != 0:
-            self.assets.play_sound('fail')
-            self.show_message("Чётные — те, что делятся на два. Два, четыре, шесть… А это нечётное!")
+        # Загружаем спрайты для цифр 1–20
+        for i in range(1, 21):
+            img = assets.get_image(f'number_{i}')
+            if img is None:
+                # Заглушка: рисуем цифру на поверхности
+                img = pygame.Surface((60, 60), pygame.SRCALPHA)
+                font = assets.fonts['medium']
+                text = font.render(str(i), True, COLORS['WHITE'])
+                img.blit(text, text.get_rect(center=(30, 30)))
+                pygame.draw.rect(img, COLORS['WHITE'], img.get_rect(), 2)
+            else:
+                img = pygame.transform.scale(img, (60, 60))
+            self.number_sprites[i] = img
+
+        # Располагаем в сетке 5x4
+        start_x = 150
+        start_y = 200
+        cols = 5
+        spacing_x = 80
+        spacing_y = 80
+        for i in range(1, 21):
+            row = (i - 1) // cols
+            col = (i - 1) % cols
+            x = start_x + col * spacing_x
+            y = start_y + row * spacing_y
+            rect = pygame.Rect(x, y, 60, 60)
+            self.number_rects.append((i, rect))
+
+    def handle_event(self, event):
+        super().handle_event(event)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for num, rect in self.number_rects:
+                if rect.collidepoint(event.pos) and not self.clicked[num]:
+                    if num % 2 == 0:
+                        self.clicked[num] = True
+                        self.assets.play_sound('click')
+                        # Проверяем, все ли чётные нажаты
+                        if all(self.clicked[i] for i in range(2, 21, 2)):
+                            self.assets.play_sound('success')
+                            self.complete(True)
+                    else:
+                        self.assets.play_sound('fail')
+                        self.show_message(f"Число {num} нечётное! Нужны только чётные.", COLORS['RED'], 1.5)
+                    break  # обработали один клик
 
     def draw(self, surface):
+        # Фон уже нарисован в TaskScreen
+        for num, rect in self.number_rects:
+            sprite = self.number_sprites[num]
+            surface.blit(sprite, rect)
+            if self.clicked[num]:
+                # Рисуем зелёную галочку или рамку поверх нажатых
+                pygame.draw.rect(surface, COLORS['GREEN'], rect, 4)
         title = self.assets.fonts['medium'].render("Нажми на все чётные числа от 1 до 20", True, COLORS['GOLD'])
         surface.blit(title, (SCREEN_WIDTH//2 - title.get_width()//2, 50))
-        for i, btn in enumerate(self.buttons):
-            if self.clicked[i+1]:
-                btn.normal_color = COLORS['GREEN']
-            btn.draw(surface)
         super().draw(surface)
 
 
@@ -1366,7 +1532,9 @@ class LoadingScreen(Screen):
     def update(self, dt):
         self.timer -= dt
         if self.timer <= 0:
-            if self.game.completed_locations or self.game.collected_letters or self.game.location_tasks_completed:
+            if len(self.game.completed_locations) >= 6:
+                self.game.set_state('WIN')
+            elif self.game.completed_locations or self.game.collected_letters or self.game.location_tasks_completed:
                 self.game.set_state('MAP')
             else:
                 self.game.set_state('PROLOG')
@@ -1580,10 +1748,12 @@ class LocationScreen(Screen):
                 self.game.assets.play_sound('letter_collect')
             self.game.completed_locations.append(self.game.current_location_num)
             self.game.save_progress()
-        else:
-            self.game.save_progress()
+            # Если это последняя локация (6), переходим на экран победы
+            if self.game.current_location_num == 6:
+                self.game.set_state('WIN')
+                return
+        self.game.save_progress()  # сохраняем даже если не всё выполнено
         self.game.set_state('MAP')
-
 
     def handle_event(self, event):
         for btn in self.task_buttons:
@@ -1656,11 +1826,11 @@ class WinScreen(Screen):
         super().__init__(game)
         self.font_title = game.assets.fonts['title']
         self.font_large = game.assets.fonts['large']
-        self.btn_reward = Button(pygame.Rect(SCREEN_WIDTH//2-200, 500, 180, 60), "Забрать награду",
-                                 game.assets.fonts['medium'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
-                                 callback=self.game.finish_game)
-        self.btn_replay = Button(pygame.Rect(SCREEN_WIDTH//2+20, 500, 180, 60), "Играть ещё раз",
+        self.btn_reward = Button(pygame.Rect(SCREEN_WIDTH//2-200, 500, 180, 60), "Выход",
                                  game.assets.fonts['medium'], COLORS['BLUE'], COLORS['LIGHT_BLUE'],
+                                 callback=self.game.finish_game)
+        self.btn_replay = Button(pygame.Rect(SCREEN_WIDTH//2+20, 500, 200, 60), "Играть ещё раз",
+                                 game.assets.fonts['medium'], COLORS['GREEN'], COLORS['LIGHT_GREEN'],
                                  callback=self.game.reset_game)
 
     def handle_event(self, event):
@@ -1673,15 +1843,16 @@ class WinScreen(Screen):
             surface.blit(bg, (0,0))
         else:
             surface.fill(COLORS['GOLD'])
-        title = self.font_title.render("ПОЗДРАВЛЯЮ!", True, COLORS['PURPLE'])
+        title = render_with_outline("ПОЗДРАВЛЯЮ!", self.font_title, COLORS['PURPLE'], COLORS['BLACK'], 2)
         surface.blit(title, title.get_rect(center=(SCREEN_WIDTH//2, 120)))
-        line2 = self.font_large.render("Ты раскрыл дело о Призраке Библиотеки!", True, COLORS['DARK_BLUE'])
+        line2 = render_with_outline("Ты раскрыл дело о Призраке Библиотеки!", self.font_large, COLORS['DARK_BLUE'], COLORS['BLACK'], 2)
         surface.blit(line2, line2.get_rect(center=(SCREEN_WIDTH//2, 200)))
-        word = self.font_large.render(f"Собранное слово: {self.game.collected_letters}", True, COLORS['RED'])
+        word = render_with_outline(f"Собранное слово: {self.game.collected_letters}", self.font_large, COLORS['RED'], COLORS['BLACK'], 2)
         surface.blit(word, word.get_rect(center=(SCREEN_WIDTH//2, 280)))
-        stars = "⭐" * self.game.stars
-        star_surf = self.font_title.render(stars, True, COLORS['GOLD'])
-        surface.blit(star_surf, star_surf.get_rect(center=(SCREEN_WIDTH//2, 360)))
+        star_img = self.game.assets.get_image('star')
+        if star_img:
+            star_rect = star_img.get_rect(center=(SCREEN_WIDTH//2, 400))
+            surface.blit(star_img, star_rect)
         self.btn_reward.draw(surface)
         self.btn_replay.draw(surface)
 
